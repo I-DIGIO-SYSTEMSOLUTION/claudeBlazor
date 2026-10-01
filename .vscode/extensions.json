@@ -1,0 +1,11 @@
+{
+  // SageMaker Code Editor は Open VSX を使うため、Microsoft 製 C# 拡張 / C# Dev Kit のデバッガー (vsdbg) は使えない。
+  // netcoredbg を同梱したオープンソース版 C# 拡張を使う。
+  "recommendations": [
+    "muhammad-sammy.csharp"
+  ],
+  "unwantedRecommendations": [
+    "ms-dotnettools.csharp",
+    "ms-dotnettools.csdevkit"
+  ]
+}

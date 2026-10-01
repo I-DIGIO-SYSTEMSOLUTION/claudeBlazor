@@ -1,0 +1,53 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="@BaseHref" />
+    <script>
+        // プロキシ配下 (SageMaker のポート転送 URL など) で開かれても動くよう、
+        // 「アドレスバーのパス」から「サーバーが受け取ったパス」を差し引いた残りを接頭辞として base href を決める。
+        // (プロキシの URL 形式や ProxyBasePath の設定に依存しない)
+        (function () {
+            var appPath = @((MarkupString)System.Text.Json.JsonSerializer.Serialize(HttpContext.Request.Path.Value ?? "/"));
+            var p = decodeURI(location.pathname);
+            var prefix = null;
+            if (appPath === "/" && !p.endsWith("/")) {
+                // 末尾の / が無いと相対パスがドメイン直下で解決されてしまうため付け直す
+                location.replace(location.pathname + "/" + location.search + location.hash);
+                return;
+            }
+            if (p.endsWith(appPath)) {
+                prefix = p.substring(0, p.length - appPath.length);
+            }
+            if (prefix) {
+                document.querySelector("base").setAttribute("href", prefix.replace(/\/$/, "") + "/");
+            }
+            console.log("[base] appPath=" + appPath + " location=" + p + " base=" + document.baseURI);
+        })();
+    </script>
+    <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["BlazorCodeEditorSample.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // プロキシ配下でも _framework/blazor.web.js や _blazor (SignalR) を正しいパスで解決させる
+    private string BaseHref => $"{HttpContext.Request.PathBase}/";
+}

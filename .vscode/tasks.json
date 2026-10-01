@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      // apt-getでインストールするのではなく手動でインストールした場合はパスが変わるため変更
+      "command": "/usr/bin/dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "-c", "Debug",          
+        //"${workspaceFolder}/MyBlazorApp.csproj", // 一旦S3からにしているためパスが異なるためフルパスで指定
+        "/mnt/custom-file-systems/s3/shared/MyBlazorApp/MyBlazorApp.csproj", // ご自身のプロジェクトファイル名に変更
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "options": {
+        "env": {
+          // apt-getでインストールするのではなく手動でインストールした場合はパスが変わるため変更
+          "DOTNET_ROOT": "/usr/lib/dotnet"
+        }
+      },      
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true } 
+    }
+  ]
+}

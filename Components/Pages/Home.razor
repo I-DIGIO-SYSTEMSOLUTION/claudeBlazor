@@ -1,0 +1,30 @@
+﻿@page "/"
+@inject NavigationManager Nav
+
+<PageTitle>Home</PageTitle>
+
+<h1>Blazor Server on SageMaker Code Editor</h1>
+
+<p>このページは Interactive Server で動作しています。</p>
+
+<table class="table table-sm w-auto">
+    <tbody>
+        <tr><th>BaseUri</th><td>@Nav.BaseUri</td></tr>
+        <tr><th>Uri</th><td>@Nav.Uri</td></tr>
+        <tr><th>サーバー時刻</th><td>@serverTime</td></tr>
+        <tr><th>.NET</th><td>@Environment.Version</td></tr>
+        <tr><th>OS</th><td>@System.Runtime.InteropServices.RuntimeInformation.OSDescription</td></tr>
+    </tbody>
+</table>
+
+<button class="btn btn-primary" @onclick="Refresh">サーバー時刻を更新</button>
+
+@code {
+    private string serverTime = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
+
+    private void Refresh()
+    {
+        // ← デバッグ確認用: ここにブレークポイントを置いてボタンを押す
+        serverTime = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
+    }
+}

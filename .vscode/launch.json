@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Code Editor のプロキシ経由でブラウザから開く用
+      // https://<StudioのドメインURL>/codeeditor/default/proxy/5000/
+      "name": "Blazor Server (SageMaker proxy)",
+      "type": "coreclr",
+      "console": "internalConsole",
+      "request": "launch",
+      "preLaunchTask": "build",
+      // apt-getでインストールするのではなく手動でインストールした場合はパスが変わるため変更
+      "program": "/usr/bin/dotnet",
+      "args": [ "${workspaceFolder}/bin/Debug/net10.0/MyBlazorApp.dll" ],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "justMyCode": true,
+      "env": {
+        // apt-getでインストールするのではなく手動でインストールした場合はパスが変わるため変更
+        "DOTNET_ROOT": "/usr/lib/dotnet",
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5000"        
+      }
+    }
+  ]
+}
