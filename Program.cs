@@ -1,6 +1,7 @@
 using MudBlazor.Services;
 using MyBlazorApp;
-
+using LogicCommon;
+using DatabaseLogic;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +9,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
+// DB 種別 (SQLServer / PostgreSQL) と接続文字列は Setting/databaseCommonConnectionSetting.xml から読み込む
+builder.Services.AddDbContextFactory<DbContextImageAnnotationComment>(
+    options => DatabaseAccessLogicSingleton.GetInstance.ConfigureDbContext(options));
 
 var app = builder.Build();
 

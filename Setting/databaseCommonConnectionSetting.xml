@@ -1,0 +1,6 @@
+<DatabaseCommonConnectionSetting xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.datacontract.org/2004/07/XMLManager">
+    <databaseConnectionString>Host=postgresql.cj0g8m0mudop.ap-northeast-1.rds.amazonaws.com;Port=5432;Database=postgres;Username=${UserName};Password=${Password};</databaseConnectionString>
+    <databasePassword>2C4E44B83E8FE6F6953307B73B8A09EC</databasePassword>
+    <databaseType>PostgreSQL</databaseType>
+    <databaseUserName>sa</databaseUserName>
+</DatabaseCommonConnectionSetting>
