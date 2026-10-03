@@ -3,37 +3,31 @@
 
 <PageTitle>天気予報</PageTitle>
 
-<h1>天気予報</h1>
+<MudText Typo="Typo.h3" GutterBottom="true">天気予報</MudText>
 
-<p>このコンポーネントはデータの表示例です。</p>
+<MudText Class="mb-4">このコンポーネントはデータの表示例です。</MudText>
 
 @if (forecasts == null)
 {
-    <p><em>読み込み中...</em></p>
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    <MudText><em>読み込み中...</em></MudText>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>日付</th>
-                <th aria-label="摂氏の気温">気温 (℃)</th>
-                <th aria-label="華氏の気温">気温 (℉)</th>
-                <th>概況</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var forecast in forecasts)
-            {
-                <tr>
-                    <td>@forecast.Date.ToShortDateString()</td>
-                    <td>@forecast.TemperatureC</td>
-                    <td>@forecast.TemperatureF</td>
-                    <td>@forecast.Summary</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <MudTable Items="forecasts" Hover="true" Striped="true" Elevation="1">
+        <HeaderContent>
+            <MudTh>日付</MudTh>
+            <MudTh aria-label="摂氏の気温">気温 (℃)</MudTh>
+            <MudTh aria-label="華氏の気温">気温 (℉)</MudTh>
+            <MudTh>概況</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="日付">@context.Date.ToShortDateString()</MudTd>
+            <MudTd DataLabel="気温 (℃)">@context.TemperatureC</MudTd>
+            <MudTd DataLabel="気温 (℉)">@context.TemperatureF</MudTd>
+            <MudTd DataLabel="概況">@context.Summary</MudTd>
+        </RowTemplate>
+    </MudTable>
 }
 
 @code {

@@ -3,11 +3,11 @@
 
 <PageTitle>ホーム</PageTitle>
 
-<h1>Blazor Server on SageMaker Code Editor</h1>
+<MudText Typo="Typo.h3" GutterBottom="true">Blazor Server on SageMaker Code Editor</MudText>
 
-<p>このページは Interactive Server で動作しています。</p>
+<MudText Class="mb-4">このページは Interactive Server で動作しています。</MudText>
 
-<table class="table table-sm w-auto">
+<MudSimpleTable Dense="true" Class="mb-4" Style="width: fit-content;">
     <tbody>
         <tr><th>BaseUri</th><td>@Nav.BaseUri</td></tr>
         <tr><th>Uri</th><td>@Nav.Uri</td></tr>
@@ -15,9 +15,9 @@
         <tr><th>.NET</th><td>@Environment.Version</td></tr>
         <tr><th>OS</th><td>@System.Runtime.InteropServices.RuntimeInformation.OSDescription</td></tr>
     </tbody>
-</table>
+</MudSimpleTable>
 
-<button class="btn btn-primary" @onclick="Refresh">サーバー時刻を更新</button>
+<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="Refresh">サーバー時刻を更新</MudButton>
 
 @code {
     private string serverTime = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");

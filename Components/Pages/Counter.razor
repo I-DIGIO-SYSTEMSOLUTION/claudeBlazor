@@ -2,11 +2,11 @@
 
 <PageTitle>カウンター</PageTitle>
 
-<h1>カウンター</h1>
+<MudText Typo="Typo.h3" GutterBottom="true">カウンター</MudText>
 
-<p role="status">現在のカウント: @currentCount</p>
+<MudText Class="mb-4" role="status">現在のカウント: @currentCount</MudText>
 
-<button class="btn btn-primary" @onclick="IncrementCount">クリック</button>
+<MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="IncrementCount">クリック</MudButton>
 
 @code {
     private int currentCount = 0;

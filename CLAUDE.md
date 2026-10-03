@@ -31,5 +31,6 @@ SageMaker のプロキシは `/codeeditor/default/proxy/5000` のプレフィッ
 
 ## 注意点
 
-- プロジェクト名は `BlazorCodeEditorSample` から変更されており、旧名が残っている箇所があります。特に `App.razor` は `BlazorCodeEditorSample.styles.css` を読み込んでいますが、スコープ付き CSS のバンドル名はアセンブリ名（`MyBlazorApp.styles.css`）になります。このリンクを直すまで、各コンポーネントの `*.razor.css` のスタイルは読み込まれません。`NavMenu.razor` のナビバーに表示されるサイト名も旧名のままです。
+- UI は MudBlazor（Bootstrap は読み込んでいない）。`MudThemeProvider` などのプロバイダーは `MainLayout.razor` に置いている。`MudNavLink` の `Href` も相対パス（先頭に `/` を付けない）にすること。
+- パッケージの静的アセット（`_content/MudBlazor/...`）は、Development 環境か publish 後でないと配信されない（Production 環境で `bin/` の dll を直接起動すると 500 になる）。
 - csproj で `BlazorDisableThrowNavigationException` を有効にしています。404 は `UseStatusCodePagesWithReExecute("/not-found")` と `Router` の `NotFoundPage` で処理します。
