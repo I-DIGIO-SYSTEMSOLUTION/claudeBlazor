@@ -1,25 +1,25 @@
 ﻿@page "/weather"
 @attribute [StreamRendering]
 
-<PageTitle>Weather</PageTitle>
+<PageTitle>天気予報</PageTitle>
 
-<h1>Weather</h1>
+<h1>天気予報</h1>
 
-<p>This component demonstrates showing data.</p>
+<p>このコンポーネントはデータの表示例です。</p>
 
 @if (forecasts == null)
 {
-    <p><em>Loading...</em></p>
+    <p><em>読み込み中...</em></p>
 }
 else
 {
     <table class="table">
         <thead>
             <tr>
-                <th>Date</th>
-                <th aria-label="Temperature in Celsius">Temp. (C)</th>
-                <th aria-label="Temperature in Fahrenheit">Temp. (F)</th>
-                <th>Summary</th>
+                <th>日付</th>
+                <th aria-label="摂氏の気温">気温 (℃)</th>
+                <th aria-label="華氏の気温">気温 (℉)</th>
+                <th>概況</th>
             </tr>
         </thead>
         <tbody>
@@ -41,11 +41,11 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // Simulate asynchronous loading to demonstrate streaming rendering
+        // ストリーミング レンダリングを示すため、非同期の読み込みを模擬する
         await Task.Delay(500);
 
         var startDate = DateOnly.FromDateTime(DateTime.Now);
-        var summaries = new[] { "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching" };
+        var summaries = new[] { "極寒", "厳寒", "肌寒い", "涼しい", "穏やか", "暖かい", "心地よい", "暑い", "蒸し暑い", "酷暑" };
         forecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
         {
             Date = startDate.AddDays(index),
