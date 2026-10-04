@@ -4,3 +4,6 @@
 **/obj/
 bin/
 obj/
+
+# log4net の出力先
+logs/

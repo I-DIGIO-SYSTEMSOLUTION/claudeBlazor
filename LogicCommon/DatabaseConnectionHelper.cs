@@ -2,6 +2,7 @@
 
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.ComponentModel;
 
 namespace LogicCommon
@@ -12,15 +13,13 @@ namespace LogicCommon
         private static readonly log4net.ILog logger =
             log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
-        private static readonly Microsoft.Extensions.Logging.ILoggerFactory loggerFactory = 
-            LoggerFactory.Create(builder =>
-                {
-                    builder
-                      .AddFilter(
-                        category: DbLoggerCategory.Database.Command.Name,
-                        level: LogLevel.Information);
-                });
+        // true のとき、SQL のログにパラメータの値も出す (値に個人情報などが含まれうるので Development のみで有効にする)
+        public static bool EnableSensitiveDataLogging { get; set; }
 
+
+        // databaseType に指定できる値。未指定の場合は DefaultDatabaseType として扱う
+        public const string DefaultDatabaseType = "SQLServer";
+        public static readonly IReadOnlyList<string> DatabaseTypes = ["SQLServer", "PostgreSQL"];
 
         public enum DATABASE_TYPE
         {
@@ -76,9 +75,40 @@ namespace LogicCommon
                 throw new ArgumentException($"未対応の databaseType です: {databaseType}", nameof(databaseType));
             }
 
-            return optionsBuilder
-                .LogTo(logger.Debug)
-                .UseLoggerFactory(loggerFactory);
+            // 実行した SQL (Database.Command カテゴリ) だけを log4net に出す
+            // 正常に実行した SQL は DEBUG、失敗した SQL (Failed executing DbCommand) は ERROR、警告は WARN
+            optionsBuilder.LogTo(
+                (eventId, level) =>
+                    level >= LogLevel.Information &&
+                    eventId.Name != null &&
+                    eventId.Name.StartsWith(DbLoggerCategory.Database.Command.Name + ".", StringComparison.Ordinal),
+                LogDatabaseCommand);
+
+            if (EnableSensitiveDataLogging)
+            {
+                optionsBuilder.EnableSensitiveDataLogging();
+            }
+
+            return optionsBuilder;
+        }
+
+        private static void LogDatabaseCommand(EventData eventData)
+        {
+            // 日時などは log4net 側で付けるので、EF Core のメッセージ本文だけを出す
+            string message = eventData.ToString();
+
+            if (eventData.LogLevel >= LogLevel.Error)
+            {
+                logger.Error(message);
+            }
+            else if (eventData.LogLevel == LogLevel.Warning)
+            {
+                logger.Warn(message);
+            }
+            else
+            {
+                logger.Debug(message);
+            }
         }
 
         public static string CreateConnectionString(

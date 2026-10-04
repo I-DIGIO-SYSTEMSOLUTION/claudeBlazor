@@ -3,12 +3,41 @@
 @using LogicCommon
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<DbContextWeatherForecast> DbFactory
+@inject SqlStatementStore SqlStore
 
 <PageTitle>天気予報</PageTitle>
 
 <MudText Typo="Typo.h3" GutterBottom="true">天気予報</MudText>
 
 <MudText Class="mb-4">PostgreSQL の weather_forecasts テーブルから取得したデータを表示しています。</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudStack Row="true" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Spacing="4">
+        <MudSelect T="string" Label="概況 (複数選択)" MultiSelection="true" Clearable="true"
+                   @bind-SelectedValues="selectedSummaries" Style="min-width: 260px;">
+            @foreach (var summary in Summaries)
+            {
+                <MudSelectItem Value="summary">@summary</MudSelectItem>
+            }
+        </MudSelect>
+        <MudNumericField T="int?" Label="最低気温 (℃) 以上" Clearable="true"
+                         @bind-Value="minTemperatureC" Style="max-width: 180px;" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search"
+                   Disabled="isBusy" OnClick="LoadForecastsAsync">
+            検索
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+           Class="mb-4" Disabled="@(isBusy || forecasts == null)" OnClick="AddRandomForecastAsync">
+    ランダムなデータを 1 行追加
+</MudButton>
+
+@if (message != null)
+{
+    <MudAlert Severity="messageSeverity" Class="mb-4">@message</MudAlert>
+}
 
 @if (errorMessage != null)
 {
@@ -27,12 +56,17 @@ else
             <MudTh aria-label="摂氏の気温">気温 (℃)</MudTh>
             <MudTh aria-label="華氏の気温">気温 (℉)</MudTh>
             <MudTh>概況</MudTh>
+            <MudTh></MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="日付">@context.Date.ToShortDateString()</MudTd>
             <MudTd DataLabel="気温 (℃)">@context.TemperatureC</MudTd>
             <MudTd DataLabel="気温 (℉)">@context.TemperatureF</MudTd>
             <MudTd DataLabel="概況">@context.Summary</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                               aria-label="削除" Disabled="isBusy" OnClick="@(() => DeleteForecastAsync(context.Id))" />
+            </MudTd>
         </RowTemplate>
     </MudTable>
 }
@@ -40,20 +74,130 @@ else
 @code {
     private WeatherForecast[]? forecasts;
     private string? errorMessage;
+    private string? message;
+    private Severity messageSeverity = Severity.Info;
+
+    // 追加・削除の処理中はボタンを無効にして二重実行を防ぐ
+    private bool isBusy;
+
+    // 検索条件 (未指定のものは WHERE 句から外れる)
+    private IReadOnlyCollection<string> selectedSummaries = [];
+    private int? minTemperatureC;
+
+    private static readonly string[] Summaries =
+        ["Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"];
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadForecastsAsync();
+    }
+
+    private async Task LoadForecastsAsync()
+    {
+        errorMessage = null;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
+            // SQL 文は Sql/WeatherForecast/Search.sql。指定した条件だけが WHERE 句に入り、概況は IN 句に展開される
+            SqlQuery query = SqlStore.Build("WeatherForecast/Search", new
+            {
+                summaries = selectedSummaries.ToList(),
+                minTemperatureC,
+            });
             forecasts = await db.WeatherForecasts
+                .FromSqlRaw(query.Sql, query.Parameters)
                 .AsNoTracking()
-                .OrderBy(f => f.Date)
                 .ToArrayAsync();
         }
         catch (Exception ex)
         {
             errorMessage = ex.Message;
         }
+    }
+
+    // 更新系の SQL はページ表示時 (事前描画と接続後で 2 回呼ばれる) ではなく、ボタン操作で実行する
+    private async Task AddRandomForecastAsync()
+    {
+        message = null;
+        isBusy = true;
+        try
+        {
+            // 日付は一覧の最終日の翌日 (データが無ければ今日)
+            DateOnly date = forecasts is { Length: > 0 }
+                ? forecasts.Max(f => f.Date).AddDays(1)
+                : DateOnly.FromDateTime(DateTime.Now);
+            int temperatureC = Random.Shared.Next(-20, 55);
+            string summary = Summaries[Random.Shared.Next(Summaries.Length)];
+
+            await using (var db = await DbFactory.CreateDbContextAsync())
+            await using (var tx = await db.Database.BeginTransactionAsync())
+            {
+                // SQL 文は Sql/WeatherForecast/Insert.sql
+                int cnt = await db.Database.ExecuteSqlRawAsync(
+                    SqlStore.Get("WeatherForecast/Insert"), date, temperatureC, summary);
+
+                if (cnt != 1)
+                {
+                    await tx.RollbackAsync();
+                    ShowMessage(Severity.Warning, $"データを追加できませんでした (追加件数 = {cnt})。");
+                    return;
+                }
+
+                await tx.CommitAsync();
+            }
+
+            ShowMessage(Severity.Success, $"追加しました: {date:yyyy/MM/dd} {temperatureC}℃ {summary}");
+            await LoadForecastsAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage(Severity.Error, $"追加に失敗しました: {ex.InnerException?.Message ?? ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task DeleteForecastAsync(int id)
+    {
+        message = null;
+        isBusy = true;
+        try
+        {
+            await using (var db = await DbFactory.CreateDbContextAsync())
+            await using (var tx = await db.Database.BeginTransactionAsync())
+            {
+                // SQL 文は Sql/WeatherForecast/Delete.sql。{0} に id がパラメータとして入る
+                int cnt = await db.Database.ExecuteSqlRawAsync(
+                    SqlStore.Get("WeatherForecast/Delete"), id);
+
+                if (cnt != 1)
+                {
+                    await tx.RollbackAsync();
+                    ShowMessage(Severity.Warning, $"削除対象のデータが見つかりませんでした (id = {id})。");
+                    return;
+                }
+
+                await tx.CommitAsync();
+            }
+
+            ShowMessage(Severity.Success, $"削除しました (id = {id})。");
+            await LoadForecastsAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage(Severity.Error, $"削除に失敗しました: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void ShowMessage(Severity severity, string text)
+    {
+        messageSeverity = severity;
+        message = text;
     }
 }

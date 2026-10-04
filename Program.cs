@@ -5,6 +5,14 @@ using DatabaseLogic;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// log4net の設定 (log4net.config)。ログは <コンテンツルート>/logs/yyyyMMdd_app_<レベル>.log に出力し、設定ファイルの変更は自動で反映する
+log4net.GlobalContext.Properties["LogDir"] = Path.Combine(builder.Environment.ContentRootPath, "logs");
+log4net.Config.XmlConfigurator.ConfigureAndWatch(
+    log4net.LogManager.GetRepository(typeof(Program).Assembly),
+    new FileInfo(Path.Combine(builder.Environment.ContentRootPath, "log4net.config")));
+// SQL のログにパラメータの値を出すのは開発時のみ
+DatabaseConnectionHelper.EnableSensitiveDataLogging = builder.Environment.IsDevelopment();
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -14,8 +22,17 @@ builder.Services.AddDbContextFactory<DbContextImageAnnotationComment>(
     options => DatabaseAccessLogicSingleton.GetInstance.ConfigureDbContext(options));
 builder.Services.AddDbContextFactory<DbContextWeatherForecast>(
     options => DatabaseAccessLogicSingleton.GetInstance.ConfigureDbContext(options));
+// Sql フォルダの SQL 文をメモリに保持し、ファイルの変更を検知して読み直す
+// DB 種別 (databaseType) に応じて、DB 用の SQL ファイル (例: Search_PostgreSQL.sql) か共通のファイル (Search.sql) を使う
+builder.Services.AddSingleton(sp => new SqlStatementStore(
+    sp.GetRequiredService<IHostEnvironment>(),
+    sp.GetRequiredService<ILogger<SqlStatementStore>>(),
+    DatabaseAccessLogicSingleton.GetInstance.databaseCommonConnectionSetting?.databaseType));
 
 var app = builder.Build();
+
+// 最初の利用時ではなく起動時に SQL ファイルを読み込む
+app.Services.GetRequiredService<SqlStatementStore>();
 
 // 診断用: 届いたリクエストのパスと結果をデバッグコンソールに出す
 app.Use(async (context, next) =>
