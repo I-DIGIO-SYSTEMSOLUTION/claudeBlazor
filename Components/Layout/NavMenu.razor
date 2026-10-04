@@ -1,8 +1,21 @@
-﻿@* プロキシ配下で動かすため、Href は先頭に / を付けない相対パスにする（ホームは空文字だとリンクにならないので "./"） *@
+﻿@inject NavigationManager Nav
+
+@* プロキシ配下で動かすため、Href は先頭に / を付けない相対パスにする（ホームは空文字だとリンクにならないので "./"） *@
 @* ボタンをもう一度押すか、メニューの外側をクリックすると閉じる *@
 <MudMenu Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" AriaLabel="メニュー"
          AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
     <MudMenuItem Href="./" Icon="@Icons.Material.Filled.Home">ホーム</MudMenuItem>
     <MudMenuItem Href="counter" Icon="@Icons.Material.Filled.AddBox">カウンター</MudMenuItem>
     <MudMenuItem Href="weather" Icon="@Icons.Material.Filled.Cloud">天気予報</MudMenuItem>
+    <AuthorizeView Roles="@AuthConstants.AdminRole">
+        <MudMenuItem Href="users" Icon="@Icons.Material.Filled.ManageAccounts">ユーザー管理</MudMenuItem>
+    </AuthorizeView>
+    <MudDivider />
+    <MudMenuItem Href="change-password" Icon="@Icons.Material.Filled.Password">パスワード変更</MudMenuItem>
+    @* ログアウトは Cookie を削除するため HTTP のエンドポイントで行う。Href だと画面内の遷移として扱われるので forceLoad で移る *@
+    <MudMenuItem OnClick="Logout" Icon="@Icons.Material.Filled.Logout">ログアウト</MudMenuItem>
 </MudMenu>
+
+@code {
+    private void Logout() => Nav.NavigateTo(AuthConstants.LogoutPath, forceLoad: true);
+}

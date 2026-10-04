@@ -1,0 +1,64 @@
+@page "/users"
+@attribute [Authorize(Roles = AuthConstants.AdminRole)]
+@inject UserAccountService AccountService
+
+<PageTitle>ユーザー管理</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">ユーザー管理</MudText>
+    <MudSpacer />
+    <MudButton Href="users/new" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd">
+        ユーザーを作成
+    </MudButton>
+</MudStack>
+
+@if (users == null)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudTable T="User" Items="users" Dense="true" Hover="true" Striped="true" Bordered="true" Elevation="1"
+              HeaderClass="table-header-colored">
+        <HeaderContent>
+            <MudTh>ログイン ID</MudTh>
+            <MudTh>表示名</MudTh>
+            <MudTh>メールアドレス</MudTh>
+            <MudTh>状態</MudTh>
+            <MudTh>最終ログイン</MudTh>
+            <MudTh>パスワード変更日時</MudTh>
+            <MudTh>作成日時</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="ログイン ID">@context.LoginId</MudTd>
+            <MudTd DataLabel="表示名">@context.DisplayName</MudTd>
+            <MudTd DataLabel="メールアドレス">@context.Email</MudTd>
+            <MudTd DataLabel="状態">
+                @if (!context.IsActive)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default">無効</MudChip>
+                }
+                else if (context.LockedUntil > DateTime.UtcNow)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error">ロック中 (@AppTime.Format(context.LockedUntil, "HH:mm") まで)</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">有効</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="最終ログイン">@AppTime.Format(context.LastLoginAt)</MudTd>
+            <MudTd DataLabel="パスワード変更日時">@AppTime.Format(context.PasswordChangedAt)</MudTd>
+            <MudTd DataLabel="作成日時">@AppTime.Format(context.CreatedAt)</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<User>? users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await AccountService.GetUsersAsync();
+    }
+}

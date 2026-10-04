@@ -1,0 +1,17 @@
+/* パスワード欄の右端に、表示／非表示の切り替えボタンを重ねる */
+.password-field {
+    position: relative;
+}
+
+.password-field ::deep .password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+}
+
+/* 入力した文字がボタンの下に隠れないよう、右側に余白を取る
+   (MudBlazor の入力欄のスタイルはクラスを重ねたセレクターで優先度が高いため !important にする) */
+.password-field ::deep input {
+    padding-right: 44px !important;
+}

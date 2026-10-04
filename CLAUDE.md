@@ -38,3 +38,18 @@ SageMaker のプロキシは `/codeeditor/default/proxy/5000` のプレフィッ
 - DB ごとに SQL が異なる場合は `Search_PostgreSQL.sql` / `Search_SQLServer.sql` のようにファイル名の末尾に `_<DB 種別>`（`databaseType` の値）を付ける。`Get` / `Build` には DB 種別なしの名前を渡し、DB 用のファイルがあればそれを、無ければ共通の `Search.sql` を使う。`_` は DB 種別の区切り専用で、`_` の後ろが DB 種別でないファイル（綴り間違いを含む）はエラーログ（log4net の ERROR ファイルにも出力）を出して読み込まない。
 - ログは 2 系統ある。ASP.NET Core 標準の `ILogger`（コンソール出力）と、LogicCommon 配下が使う log4net（`log4net.config`、出力先は `<コンテンツルート>/logs/yyyyMMdd_app_<DEBUG|INFO|WARN|ERROR>.log` で日付・レベルごとに分かれる、Program.cs で `ConfigureAndWatch`）。EF Core が実行した SQL は `DatabaseConnectionHelper.UseDatabase` の `LogTo` で log4net に DEBUG で出し、Development のときだけパラメータの値も出す。
 - csproj で `BlazorDisableThrowNavigationException` を有効にしています。404 は `UseStatusCodePagesWithReExecute("/not-found")` と `Router` の `NotFoundPage` で処理します。
+- `SqlTemplate` に渡した null は null のまま EF Core に渡す（`DBNull.Value` にすると `ExecuteSqlRaw` で例外になる）。
+
+## ログイン機能
+
+設計と決定事項は `docs/login-design.md`。処理は `Logic/Authentication/`、テーブルは `users` / `user_sessions` / `user_tokens` / `login_histories` / `security_policies` など（外部キーは設定しない方針）。テーブルの DDL は `Ddl/CreateAuthTables_<DB 種別>.sql`（`Ddl/` はアプリが読み込む `Sql/` とは別のフォルダ）。SQL Server では日時を `datetime2` に UTC で持つ（Entity が `DateTime` のため）。
+
+- `Components/_Imports.razor` の `@attribute [Authorize]` で全画面がログイン必須。ログインなしで見せる画面には `@attribute [AllowAnonymous]` を付ける。
+- ログイン Cookie は対話モード（SignalR）では発行・削除できないため、`account/signin`（チケットで発行）と `account/end-session` の HTTP エンドポイントで行う。画面からは `NavigateTo(..., forceLoad: true)` で移る（`Href` だと画面内の遷移になり 404）。アプリの URL に `logout` を含めないこと（SageMaker のプロキシ配下でアプリに届かず、SageMaker の認証が切れる現象があった）。
+- サーバーが返すリダイレクトは `AppUrl.RelativeFromRequest` で相対パスにする（`ProxyBasePath` 未設定だと `PathBase` が空で、絶対パスではプロキシのプレフィックスが抜けるため）。`UseAuthentication` / `UseAuthorization` はプロキシのパス書き換えの後に明示的に呼んでいる。
+- ログイン状態は Blazor の接続ではなく `user_sessions` の行で判定する（自動ログアウトは `SessionMonitor`、HTTP リクエストは Cookie の `OnValidatePrincipal`）。
+- 画面（`Components/Pages` 配下）は `Components/Pages/_Imports.razor` の `@inherits AppPageBase` で、イベント処理と初期表示の読み込みを「サーバー処理中」として数え、その間は自動ログアウトしない。別の `@inherits` を書くと対象外になる。`CircuitHandler.CreateInboundActivityHandler` は非同期処理の終了を待たないので、この用途には使えない。
+- 対話モードでは `HttpContext` が使えないので、接続元 IP は `MainLayout` がプリレンダリング時に取得して `ClientConnectionInfo`（scoped）に入れている。プリレンダリングで取得した値を対話モードに引き継ぐ画面は `[PersistentState]` を使う（使わないと切り替え時に読み込み中の表示に戻り、ボタンが作り直される）。
+- 認証関係の DbContext（`DbContextAuth` / `DbContextDataProtection`）は、開発時でも SQL のログにパラメータの値を出さない（`ConfigureDbContext(options, allowSensitiveDataLogging: false)`）。
+- Data Protection の鍵は `data_protection_keys` テーブルに保存している。削除するとログイン Cookie と暗号化済みの値が復号できなくなる。
+- 接続元 IP をプロキシの `X-Forwarded-For` から取るのは、`appsettings.json` の `ForwardedHeaders` に信頼するプロキシを書いたときだけ。

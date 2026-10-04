@@ -8,6 +8,20 @@ retryButton.addEventListener("click", retry);
 const resumeButton = document.getElementById("components-resume-button");
 resumeButton.addEventListener("click", resume);
 
+// 既定の回数の再接続に失敗した後も、この間隔で再試行を続ける (プロキシのタイムアウトなどで切れた場合に、
+// サーバーへ届くようになったら自動で戻れるように)。ログイン状態は Cookie と DB にあるので、再読み込みしても保たれる
+const autoRetryIntervalMs = 10000;
+let autoRetryTimer = null;
+
+function scheduleAutoRetry() {
+    if (autoRetryTimer === null) {
+        autoRetryTimer = setTimeout(() => {
+            autoRetryTimer = null;
+            retry();
+        }, autoRetryIntervalMs);
+    }
+}
+
 function handleReconnectStateChanged(event) {
     if (event.detail.state === "show") {
         reconnectModal.showModal();
@@ -15,6 +29,7 @@ function handleReconnectStateChanged(event) {
         reconnectModal.close();
     } else if (event.detail.state === "failed") {
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
+        scheduleAutoRetry();
     } else if (event.detail.state === "rejected") {
         location.reload();
     }
@@ -42,6 +57,7 @@ async function retry() {
     } catch (err) {
         // 例外が発生した = 現在サーバーを利用できない
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
+        scheduleAutoRetry();
     }
 }
 

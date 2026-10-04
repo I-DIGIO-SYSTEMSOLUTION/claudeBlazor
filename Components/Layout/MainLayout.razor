@@ -1,5 +1,6 @@
 ﻿@inherits LayoutComponentBase
 @inject IJSRuntime JS
+@inject ClientConnectionInfo ClientInfo
 
 <MudThemeProvider Theme="@AppThemes.Find(themeKey).Theme" IsDarkMode="isDarkMode" />
 <MudPopoverProvider />
@@ -13,7 +14,15 @@
         <MudLink Href="https://learn.microsoft.com/aspnet/core/" Target="_blank" Color="Color.Inherit" Class="mr-2">このアプリについて</MudLink>
         <ThemeMenu ThemeKey="@themeKey" ThemeKeyChanged="ChangeThemeAsync"
                    IsDarkMode="isDarkMode" IsDarkModeChanged="ChangeDarkModeAsync" />
-        <NavMenu />
+        @* メニューはログインしているときだけ表示する (ログイン画面などでは出さない) *@
+        <AuthorizeView>
+            <Authorized>
+                <MudText Typo="Typo.body2" Class="ml-2 d-none d-sm-flex">@context.User.Identity?.Name さん</MudText>
+                <NavMenu />
+                @* 操作が無い時間を監視し、規定の時間を過ぎたらログアウトする *@
+                <SessionMonitor />
+            </Authorized>
+        </AuthorizeView>
     </MudAppBar>
 
     <MudMainContent>
@@ -47,6 +56,14 @@
     [PersistentState]
     public bool? PersistedDarkMode { get; set; }
 
+    // 接続元の IP・User-Agent (ログイン履歴と IP 単位の試行制限で使う)。
+    // 対話モードでは HttpContext が使えないので、プリレンダリングのときに取得して引き継ぐ
+    [PersistentState]
+    public string? PersistedClientIp { get; set; }
+
+    [PersistentState]
+    public string? PersistedUserAgent { get; set; }
+
     private string themeKey = AppThemes.All[0].Key;
     private bool isDarkMode;
 
@@ -56,6 +73,14 @@
         {
             PersistedThemeKey = HttpContext.Request.Cookies[ThemeKeyCookieName];
             PersistedDarkMode = HttpContext.Request.Cookies[DarkModeCookieName] == "true";
+            PersistedClientIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+            PersistedUserAgent = HttpContext.Request.Headers.UserAgent.ToString();
+        }
+
+        if (PersistedClientIp != null)
+        {
+            ClientInfo.IpAddress = PersistedClientIp;
+            ClientInfo.UserAgent = PersistedUserAgent;
         }
 
         themeKey = AppThemes.Find(PersistedThemeKey).Key;

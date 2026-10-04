@@ -56,10 +56,13 @@ namespace LogicCommon
 
         // databaseType に応じて DB プロバイダーを設定する (未指定は SQLServer)
         // DI 登録 (AddDbContextFactory) と CreateContextOption の両方から使う
+        // allowSensitiveDataLogging = false にすると、EnableSensitiveDataLogging が true でもパラメータの値をログに出さない
+        // (パスワードハッシュやトークンを扱う認証関係の DbContext で使う)
         public static DbContextOptionsBuilder UseDatabase(
             DbContextOptionsBuilder optionsBuilder,
             string databaseType,
-            string connectionString)
+            string connectionString,
+            bool allowSensitiveDataLogging = true)
         {
             if (string.IsNullOrEmpty(databaseType) ||
                 "SQLServer".Equals(databaseType))
@@ -84,7 +87,7 @@ namespace LogicCommon
                     eventId.Name.StartsWith(DbLoggerCategory.Database.Command.Name + ".", StringComparison.Ordinal),
                 LogDatabaseCommand);
 
-            if (EnableSensitiveDataLogging)
+            if (EnableSensitiveDataLogging && allowSensitiveDataLogging)
             {
                 optionsBuilder.EnableSensitiveDataLogging();
             }

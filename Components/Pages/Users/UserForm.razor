@@ -1,0 +1,43 @@
+@* ユーザーの入力欄 (ユーザー作成画面と、最初の管理者の登録画面で共通) *@
+<MudText Typo="Typo.body2" Class="mb-4">パスワードの条件: @PolicyText</MudText>
+<ErrorList Errors="Errors" />
+@* ブラウザ標準の入力チェック (type="email") ではなく、画面のメッセージで知らせる *@
+<EditForm Model="Model" OnSubmit="OnSubmit" novalidate>
+    <MudStack Spacing="3">
+        <MudTextField @bind-Value="Model.LoginId" Label="ログイン ID" Variant="Variant.Outlined" Immediate="true"
+                      autocomplete="off" MaxLength="256" />
+        <MudTextField @bind-Value="Model.DisplayName" Label="表示名" Variant="Variant.Outlined" Immediate="true"
+                      MaxLength="100" />
+        <MudTextField @bind-Value="Model.Email" Label="メールアドレス" Variant="Variant.Outlined" Immediate="true"
+                      InputType="InputType.Email" MaxLength="256" HelperText="パスワードを忘れたときの再設定メールの送り先" />
+        <MudTextField @bind-Value="Model.Password" Label="パスワード" Variant="Variant.Outlined" Immediate="true"
+                      InputType="InputType.Password" autocomplete="new-password" />
+        <MudTextField @bind-Value="Model.PasswordConfirm" Label="パスワード (確認)" Variant="Variant.Outlined" Immediate="true"
+                      InputType="InputType.Password" autocomplete="new-password" />
+        @if (Roles != null)
+        {
+            <MudSelect T="string" Label="ロール (複数選択)" MultiSelection="true" Variant="Variant.Outlined"
+                       SelectedValues="Model.RoleCodes" SelectedValuesChanged="values => Model.RoleCodes = values.ToList()">
+                @foreach (Role role in Roles)
+                {
+                    <MudSelectItem Value="role.Code">@role.Name (@role.Code)</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                   Disabled="@(Busy || !RendererInfo.IsInteractive)">
+            @SubmitText
+        </MudButton>
+    </MudStack>
+</EditForm>
+
+@code {
+    [Parameter, EditorRequired] public NewUserInput Model { get; set; } = default!;
+    [Parameter] public string PolicyText { get; set; } = "";
+    [Parameter] public IReadOnlyList<string> Errors { get; set; } = [];
+    // null のときはロールの選択欄を出さない
+    [Parameter] public IReadOnlyList<Role>? Roles { get; set; }
+    [Parameter] public string SubmitText { get; set; } = "登録";
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback OnSubmit { get; set; }
+}

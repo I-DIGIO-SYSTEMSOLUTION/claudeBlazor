@@ -1,0 +1,238 @@
+@implements IAsyncDisposable
+@inject SessionService SessionService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILogger<SessionMonitor> Logger
+
+@* 操作が無い時間を監視し、規定の時間 (security_policies.idle_timeout_minutes) を過ぎたらログアウトする。
+   - 操作 (クリック・キー入力・画面遷移・マウスの移動・スクロール) はブラウザで検知し、DB の user_sessions に記録する
+   - どのタブの操作も同じ行に記録されるので、1 つのタブで操作していれば他のタブもログインしたまま
+   - サーバーで処理を実行中 (AppPageBase で捕捉) は期限が来ない
+   - 期限の timeout_warning_seconds 秒前に警告を出す *@
+<MudDialog @bind-Visible="warningVisible" Options="dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">まもなくログアウトします</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText>操作が無いため、あと <b>@remainingSeconds</b> 秒でログアウトします。</MudText>
+        <MudText>続けて使う場合は「ログインを延長」を押すか、画面を操作してください。</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ExtendAsync">ログインを延長</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    // DB でセッションの状態を確認する間隔 (警告を出している間は WarningPollSeconds)
+    private const int PollSeconds = 15;
+    private const int WarningPollSeconds = 3;
+
+    // 操作の通知をまとめる間隔 (通常 / 警告を出している間)
+    private const int ActivityIntervalMs = 60_000;
+    private const int WarningActivityIntervalMs = 1_000;
+
+    // 画面遷移を操作として記録する最小間隔
+    private static readonly TimeSpan LocationTouchInterval = TimeSpan.FromSeconds(30);
+
+    private readonly DialogOptions dialogOptions = new() { BackdropClick = false, CloseOnEscapeKey = false, CloseButton = false };
+    private readonly CancellationTokenSource cts = new();
+
+    private Guid? sessionId;
+    private SessionStatus? status;
+    private bool warningVisible;
+    private int remainingSeconds;
+    private DateTime lastLocationTouch;
+    private bool loggingOut;
+
+    private IJSObjectReference? module;
+    private IJSObjectReference? activityHandle;
+    private DotNetObjectReference<SessionMonitor>? selfRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthenticationState state = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (Guid.TryParse(state.User.FindFirst(AuthConstants.SessionIdClaim)?.Value, out Guid id))
+        {
+            sessionId = id;
+            Nav.LocationChanged += OnLocationChanged;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // プリレンダリング中は呼ばれない (対話モードになってから監視を始める)
+        if (!firstRender || sessionId == null)
+        {
+            return;
+        }
+
+        try
+        {
+            selfRef = DotNetObjectReference.Create(this);
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Layout/SessionMonitor.razor.js");
+            activityHandle = await module.InvokeAsync<IJSObjectReference>("start", selfRef, ActivityIntervalMs);
+        }
+        catch (JSDisconnectedException)
+        {
+            return;
+        }
+
+        _ = MonitorLoopAsync(cts.Token);
+    }
+
+    private async Task MonitorLoopAsync(CancellationToken token)
+    {
+        try
+        {
+            await InvokeAsync(CheckAsync);
+
+            using PeriodicTimer timer = new(TimeSpan.FromSeconds(1));
+            int elapsed = 0;
+            while (await timer.WaitForNextTickAsync(token))
+            {
+                elapsed++;
+                if (elapsed >= (warningVisible ? WarningPollSeconds : PollSeconds) || (status != null && remainingSeconds <= 1))
+                {
+                    elapsed = 0;
+                    await InvokeAsync(CheckAsync);
+                }
+                else if (warningVisible)
+                {
+                    // 警告のカウントダウン (DB は読まずに、前回確認した期限から計算する)
+                    await InvokeAsync(UpdateWarningAsync);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    // DB でセッションの状態を確認する。終了していればログアウトする
+    private async Task CheckAsync()
+    {
+        if (sessionId == null || loggingOut)
+        {
+            return;
+        }
+
+        SessionStatus current;
+        try
+        {
+            current = await SessionService.GetStatusAsync(sessionId.Value);
+        }
+        catch (Exception ex)
+        {
+            // DB に接続できないときなどはログアウトにせず、次の確認で再試行する
+            Logger.LogWarning(ex, "セッションの状態を確認できませんでした。");
+            return;
+        }
+
+        if (!current.IsValid)
+        {
+            loggingOut = true;
+            cts.Cancel();
+            string reason = current.EndReason == SessionEndReasons.IdleTimeout ? "timeout" : "ended";
+            Nav.NavigateTo($"{AuthConstants.LogoutPath}?reason={reason}", forceLoad: true);
+            return;
+        }
+
+        status = current;
+        await UpdateWarningAsync();
+    }
+
+    private async Task UpdateWarningAsync()
+    {
+        if (status == null)
+        {
+            return;
+        }
+
+        remainingSeconds = Math.Max(0, (int)Math.Ceiling((status.ExpiresAt - DateTime.UtcNow).TotalSeconds));
+        bool show = status.WarningSeconds > 0 && !status.IsProcessing && remainingSeconds <= status.WarningSeconds;
+        if (show != warningVisible)
+        {
+            warningVisible = show;
+            await SetActivityIntervalAsync(show ? WarningActivityIntervalMs : ActivityIntervalMs);
+        }
+        StateHasChanged();
+    }
+
+    // ブラウザで操作を検知したときに呼ばれる (SessionMonitor.razor.js)
+    // idleSeconds は最後の操作から通知するまでの秒数 (通知はまとめて送るので、実際の操作はその分だけ前)
+    [JSInvokable]
+    public async Task ReportActivity(int idleSeconds)
+    {
+        if (sessionId == null || loggingOut)
+        {
+            return;
+        }
+        try
+        {
+            await SessionService.TouchAsync(sessionId.Value, TimeSpan.FromSeconds(idleSeconds));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "操作を記録できませんでした。");
+            return;
+        }
+
+        // 警告を出している場合は、延長されたことをすぐに反映する
+        if (warningVisible)
+        {
+            await CheckAsync();
+        }
+    }
+
+    private Task ExtendAsync() => ReportActivity(0);
+
+    // 画面遷移も操作として記録する
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (DateTime.UtcNow - lastLocationTouch < LocationTouchInterval)
+        {
+            return;
+        }
+        lastLocationTouch = DateTime.UtcNow;
+        _ = InvokeAsync(() => ReportActivity(0));
+    }
+
+    private async Task SetActivityIntervalAsync(int intervalMs)
+    {
+        if (activityHandle == null)
+        {
+            return;
+        }
+        try
+        {
+            await activityHandle.InvokeVoidAsync("setInterval", intervalMs);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        cts.Cancel();
+        Nav.LocationChanged -= OnLocationChanged;
+        try
+        {
+            if (activityHandle != null)
+            {
+                await activityHandle.InvokeVoidAsync("stop");
+                await activityHandle.DisposeAsync();
+            }
+            if (module != null)
+            {
+                await module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // 接続が切れた後の破棄では JS を呼べない
+        }
+        selfRef?.Dispose();
+    }
+}

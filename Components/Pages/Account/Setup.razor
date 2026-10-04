@@ -1,0 +1,74 @@
+@page "/setup"
+@attribute [AllowAnonymous]
+@using MyBlazorApp.Components.Pages.Users
+@inject UserAccountService AccountService
+@inject NavigationManager Nav
+@inject ILogger<Setup> Logger
+
+@* 最初の管理者の登録。ユーザーが 1 人もいないときだけ使える (登録すると ADMIN ロールが付く) *@
+<PageTitle>最初の管理者の登録</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="mt-8">
+    <MudPaper Class="pa-6" Elevation="2">
+        <MudText Typo="Typo.h5" GutterBottom="true">最初の管理者の登録</MudText>
+
+        @if (SetupRequired == null)
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (SetupRequired == false)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">既にユーザーが登録されています。</MudAlert>
+            <MudLink Href="@AuthConstants.LoginPath">ログイン画面へ</MudLink>
+        }
+        else
+        {
+            <MudText Class="mb-4">ユーザーがまだ登録されていません。管理者のアカウントを登録してください。</MudText>
+            <UserForm Model="model" PolicyText="@PolicyText" Errors="errors" Busy="busy" SubmitText="管理者を登録" OnSubmit="SubmitAsync" />
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private readonly NewUserInput model = new();
+    // プリレンダリングで確認した結果を対話モードに引き継ぐ (切り替わるときに読み込み中の表示に戻らないように)
+    [PersistentState] public bool? SetupRequired { get; set; }
+    [PersistentState] public string? PolicyText { get; set; }
+    private IReadOnlyList<string> errors = [];
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        PolicyText ??= PasswordPolicy.Describe(await AccountService.GetSecurityPolicyAsync());
+        SetupRequired ??= await AccountService.IsSetupRequiredAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (busy)
+        {
+            return;
+        }
+        busy = true;
+        errors = [];
+        try
+        {
+            AccountResult result = await AccountService.CreateFirstAdminAsync(model);
+            if (result.Succeeded)
+            {
+                Nav.NavigateTo($"{AuthConstants.LoginPath}?reason=setup");
+                return;
+            }
+            errors = result.Errors;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "最初の管理者を登録できませんでした。");
+            errors = ["登録中にエラーが発生しました。"];
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

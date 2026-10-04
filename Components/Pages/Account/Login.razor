@@ -1,0 +1,165 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@inject LoginService LoginService
+@inject UserAccountService AccountService
+@inject ClientConnectionInfo ClientInfo
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILogger<Login> Logger
+
+<PageTitle>ログイン</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="mt-8">
+    <MudPaper Class="pa-6" Elevation="2">
+        <MudText Typo="Typo.h5" GutterBottom="true">ログイン</MudText>
+
+        @if (infoMessage != null)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">@infoMessage</MudAlert>
+        }
+        <ErrorList Errors="errors" />
+
+        @* 対話モードになるまではボタンを押せないようにする (Enter キーでの送信も止まる) *@
+        <EditForm Model="model" OnSubmit="LoginAsync">
+            <MudStack Spacing="3">
+                @* 入力欄の先頭にアイコンを表示する (Adornment) *@
+                <MudTextField @bind-Value="model.LoginId" Label="ログイン ID" Variant="Variant.Outlined" Immediate="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Person"
+                              autocomplete="username" AutoFocus="true" />
+                @* MudTextField のアイコン (Adornment) は 1 か所だけなので、表示／非表示の切り替えボタンは入力欄の右端に重ねて置く (Login.razor.css) *@
+                <div class="password-field">
+                    <MudTextField @bind-Value="model.Password" Label="パスワード" Variant="Variant.Outlined" Immediate="true"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Lock"
+                                  InputType="@(showPassword ? InputType.Text : InputType.Password)" autocomplete="current-password" />
+                    <MudIconButton Class="password-toggle" Size="Size.Small" Disabled="@(!RendererInfo.IsInteractive)"
+                                   Icon="@(showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                   aria-label="@(showPassword ? "パスワードを隠す" : "パスワードを表示")"
+                                   OnClick="() => showPassword = !showPassword" />
+                </div>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                           Disabled="@(busy || !RendererInfo.IsInteractive)">
+                    ログイン
+                </MudButton>
+            </MudStack>
+        </EditForm>
+
+        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+            <MudLink Href="forgot-password" Typo="Typo.body2">パスワードを忘れた場合</MudLink>
+        </MudStack>
+
+        @if (SetupRequired == true)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-4">
+                ユーザーが登録されていません。<MudLink Href="setup">最初の管理者を登録</MudLink>してください。
+            </MudAlert>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    // ログイン後に戻る画面 (アプリ内の相対パス)
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    // ログイン画面に来た理由 (自動ログアウトなど)
+    [SupplyParameterFromQuery] public string? Reason { get; set; }
+
+    private sealed class LoginModel
+    {
+        public string LoginId { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    private readonly LoginModel model = new();
+    private IReadOnlyList<string> errors = [];
+    private string? infoMessage;
+    // プリレンダリングで確認した結果を対話モードに引き継ぐ
+    [PersistentState] public bool? SetupRequired { get; set; }
+    private bool busy;
+    // パスワードを文字で表示するか (目のアイコンで切り替える)
+    private bool showPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // ログイン済みならログイン画面は出さずに戻り先へ移る
+        AuthenticationState state = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            Nav.NavigateTo(ReturnPath);
+            return;
+        }
+
+        infoMessage = Reason switch
+        {
+            "timeout" => "一定時間操作が無かったため、ログアウトしました。",
+            "ended" => "ログイン状態が終了しました。もう一度ログインしてください。",
+            "expired" => "時間がたったため、ログインをやり直してください。",
+            "reset" => "パスワードを変更しました。新しいパスワードでログインしてください。",
+            "setup" => "管理者を登録しました。ログインしてください。",
+            _ => null,
+        };
+
+        try
+        {
+            SetupRequired ??= await AccountService.IsSetupRequiredAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "ユーザー数を取得できませんでした。");
+        }
+    }
+
+    private string ReturnPath => AppUrl.SanitizeReturnUrl(ReturnUrl) is { Length: > 0 } path ? path : "./";
+
+    private async Task LoginAsync()
+    {
+        if (busy)
+        {
+            return;
+        }
+        errors = [];
+        infoMessage = null;
+        if (string.IsNullOrWhiteSpace(model.LoginId) || string.IsNullOrEmpty(model.Password))
+        {
+            errors = ["ログイン ID とパスワードを入力してください。"];
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            LoginResult result = await LoginService.PasswordSignInAsync(model.LoginId, model.Password, ClientInfo);
+            switch (result.Status)
+            {
+                case LoginStatus.Succeeded:
+                    // Cookie の発行は HTTP のエンドポイントで行う (対話モードの画面からは発行できないため)
+                    string returnUrl = Uri.EscapeDataString(AppUrl.SanitizeReturnUrl(ReturnUrl));
+                    Nav.NavigateTo($"{AuthConstants.SignInPath}?ticket={Uri.EscapeDataString(result.Ticket!)}&returnUrl={returnUrl}",
+                        forceLoad: true);
+                    return;
+
+                case LoginStatus.PasswordExpired:
+                    Nav.NavigateTo($"{AuthConstants.ResetPasswordPath}?token={Uri.EscapeDataString(result.ResetToken!)}&expired=true");
+                    return;
+
+                case LoginStatus.MfaRequired:
+                    errors = ["追加の認証 (ワンタイムパスワード) が必要なアカウントですが、現在は対応していません。管理者に連絡してください。"];
+                    break;
+
+                default:
+                    // ロック中・IP のブロック・存在しない ID なども同じ表示にする (理由は login_histories に記録している)
+                    errors = ["ログイン ID またはパスワードが正しくありません。"];
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "ログインの処理でエラーが発生しました。");
+            errors = ["ログインの処理中にエラーが発生しました。しばらくしてからもう一度お試しください。"];
+        }
+        finally
+        {
+            busy = false;
+        }
+        model.Password = "";
+    }
+}

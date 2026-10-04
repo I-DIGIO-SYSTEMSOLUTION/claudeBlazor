@@ -15,7 +15,7 @@ namespace LogicCommon
     //    例: IN (@ids) -> IN ({0}, {1}, {2})
     //  - 要素がさらにコレクション (object[] など) の場合は、要素ごとに丸かっこで囲んだ行に展開する (VALUES 句用)。
     //    例: VALUES @rows (rows = [[1, "a"], [2, "b"]]) -> VALUES ({0}, {1}), ({2}, {3})
-    //  - null は DBNull.Value にして渡す。
+    //  - null は null のまま渡す (DBNull.Value にすると ExecuteSqlRaw で「DBNull の型の対応が無い」例外になるため)。
     //  - "--" で始まるコメント行の "@名前" は置き換えない。
     public static partial class SqlTemplate
     {
@@ -75,7 +75,8 @@ namespace LogicCommon
             string AddValue(object? value)
             {
                 string position = $"{{{parameterValues.Count}}}";
-                parameterValues.Add(value ?? DBNull.Value);
+                // EF Core の params object[] は要素の null を受け付ける (null 許容の注釈が無いだけ)
+                parameterValues.Add(value!);
                 return position;
             }
 

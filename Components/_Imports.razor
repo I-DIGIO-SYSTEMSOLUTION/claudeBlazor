@@ -10,3 +10,8 @@
 @using MyBlazorApp
 @using MyBlazorApp.Components
 @using MyBlazorApp.Components.Layout
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using LogicCommon
+@* すべての画面でログインを必須にする。ログインしなくても見られる画面には @attribute [AllowAnonymous] を付ける *@
+@attribute [Authorize]

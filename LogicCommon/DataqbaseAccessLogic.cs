@@ -108,7 +108,8 @@ namespace DatabaseLogic
         }
 
         // AddDbContextFactory などに渡す DbContextOptionsBuilder へ、設定ファイルの DB 種別と接続文字列を適用する
-        public void ConfigureDbContext(DbContextOptionsBuilder optionsBuilder)
+        // allowSensitiveDataLogging = false にすると、開発時でも SQL のログにパラメータの値を出さない
+        public void ConfigureDbContext(DbContextOptionsBuilder optionsBuilder, bool allowSensitiveDataLogging = true)
         {
             if (string.IsNullOrEmpty(connectionString))
             {
@@ -119,7 +120,8 @@ namespace DatabaseLogic
             DatabaseConnectionHelper.UseDatabase(
                 optionsBuilder,
                 databaseCommonConnectionSetting.databaseType,
-                connectionString);
+                connectionString,
+                allowSensitiveDataLogging);
         }
     }
 }

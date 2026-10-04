@@ -1,0 +1,75 @@
+@page "/users/new"
+@attribute [Authorize(Roles = AuthConstants.AdminRole)]
+@using System.Security.Claims
+@inject UserAccountService AccountService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject ILogger<UserCreate> Logger
+
+<PageTitle>ユーザーの作成</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-4">
+    <MudPaper Class="pa-6" Elevation="2">
+        <MudText Typo="Typo.h5" GutterBottom="true">ユーザーの作成</MudText>
+        @if (Roles == null)
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <UserForm Model="model" PolicyText="@PolicyText" Errors="errors" Roles="Roles" Busy="busy" SubmitText="作成" OnSubmit="SubmitAsync" />
+        }
+        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+            <MudLink Href="users" Typo="Typo.body2">ユーザー一覧に戻る</MudLink>
+        </MudStack>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private readonly NewUserInput model = new();
+    // プリレンダリングで取得した値を対話モードに引き継ぐ (切り替わるときに読み込み中の表示に戻らないように)
+    [PersistentState] public List<Role>? Roles { get; set; }
+    [PersistentState] public string? PolicyText { get; set; }
+    private IReadOnlyList<string> errors = [];
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        PolicyText ??= PasswordPolicy.Describe(await AccountService.GetSecurityPolicyAsync());
+        Roles ??= await AccountService.GetRolesAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (busy)
+        {
+            return;
+        }
+        busy = true;
+        errors = [];
+        try
+        {
+            ClaimsPrincipal user = (await AuthStateProvider.GetAuthenticationStateAsync()).User;
+            long adminId = long.Parse(user.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+            AccountResult result = await AccountService.CreateUserAsync(model, adminId);
+            if (result.Succeeded)
+            {
+                Snackbar.Add($"ユーザー {model.LoginId} を作成しました。", Severity.Success);
+                Nav.NavigateTo("users");
+                return;
+            }
+            errors = result.Errors;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "ユーザーを作成できませんでした。");
+            errors = ["ユーザーの作成中にエラーが発生しました。"];
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

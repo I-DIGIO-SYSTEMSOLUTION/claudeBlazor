@@ -1,0 +1,23 @@
+@* 入力チェックなどのエラーメッセージ (複数可) を表示する *@
+@if (Errors.Count > 0)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        @if (Errors.Count == 1)
+        {
+            @Errors[0]
+        }
+        else
+        {
+            <ul class="ma-0 pl-4">
+                @foreach (string error in Errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        }
+    </MudAlert>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<string> Errors { get; set; } = [];
+}
