@@ -13,6 +13,9 @@ namespace LogicCommon
     //  - "@名前" は引数の値に置き換える。値は SQL 文に埋め込まず、EF Core の位置パラメータ ({0}, {1}, ...) にする。
     //  - コレクション (string 以外の IEnumerable) は要素数分のパラメータに展開する (IN 句用)。
     //    例: IN (@ids) -> IN ({0}, {1}, {2})
+    //  - 要素がさらにコレクション (object[] など) の場合は、要素ごとに丸かっこで囲んだ行に展開する (VALUES 句用)。
+    //    例: VALUES @rows (rows = [[1, "a"], [2, "b"]]) -> VALUES ({0}, {1}), ({2}, {3})
+    //  - null は DBNull.Value にして渡す。
     //  - "--" で始まるコメント行の "@名前" は置き換えない。
     public static partial class SqlTemplate
     {
@@ -68,6 +71,14 @@ namespace LogicCommon
             List<object> parameterValues = new();
             Dictionary<string, string> placeholders = new(StringComparer.OrdinalIgnoreCase);
 
+            // 値をパラメータに追加し、位置パラメータの文字列 ({n}) を返す
+            string AddValue(object? value)
+            {
+                string position = $"{{{parameterValues.Count}}}";
+                parameterValues.Add(value ?? DBNull.Value);
+                return position;
+            }
+
             string ReplaceParameter(Match match)
             {
                 string parameterName = match.Groups[1].Value;
@@ -85,12 +96,29 @@ namespace LogicCommon
                     List<string> items = new();
                     foreach (object? item in (IEnumerable)value!)
                     {
-                        items.Add($"{{{parameterValues.Count}}}");
-                        parameterValues.Add(item!);
+                        if (IsCollection(item))
+                        {
+                            // 行のリスト (VALUES 句用): 1 要素を (値, 値, ...) の 1 行にする
+                            List<string> columns = new();
+                            foreach (object? column in (IEnumerable)item!)
+                            {
+                                columns.Add(AddValue(column));
+                            }
+                            if (columns.Count == 0)
+                            {
+                                throw new ArgumentException(
+                                    $"{name}.sql: 引数 {parameterName} に値が 0 個の行があります。", nameof(parameters));
+                            }
+                            items.Add($"({string.Join(", ", columns)})");
+                        }
+                        else
+                        {
+                            items.Add(AddValue(item));
+                        }
                     }
                     if (items.Count == 0)
                     {
-                        // IN () は SQL として不正なので、空になりうる場合は --#if で囲んでもらう
+                        // IN () や VALUES だけの句は SQL として不正なので、空になりうる場合は --#if で囲んでもらう
                         throw new ArgumentException(
                             $"{name}.sql: 引数 {parameterName} が空のコレクションです。条件ごと外す場合は --#if {parameterName} で囲んでください。",
                             nameof(parameters));
@@ -99,8 +127,7 @@ namespace LogicCommon
                 }
                 else
                 {
-                    placeholder = $"{{{parameterValues.Count}}}";
-                    parameterValues.Add(value!);
+                    placeholder = AddValue(value);
                 }
 
                 placeholders[parameterName] = placeholder;

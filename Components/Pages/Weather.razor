@@ -216,6 +216,10 @@
         message = null;
     }
 
+    // 1 回の UPDATE で更新する最大行数。SQL Server はパラメータが 1 文 2100 個までで、1 行 5 個なので 419 行が上限。
+    // 余裕を持たせて 400 行ごとに分ける (PostgreSQL の上限 65535 個よりも小さいので、どちらの DB でもこの値で動く)
+    private const int BulkUpdateBatchSize = 400;
+
     // 変更した行をまとめて更新する。1 件でも失敗したら全件取り消し、画面の変更はそのまま残す (直して再度保存できるように)
     // 読み込んだ後に他の人が変更・削除した行 (最終更新日が変わっている行) があれば、上書きせずに保存をやめ、どの行かを表示する
     private async Task SaveChangesAsync()
@@ -230,19 +234,26 @@
             await using (var db = await DbFactory.CreateDbContextAsync())
             await using (var tx = await db.Database.BeginTransactionAsync())
             {
-                List<string> conflicts = [];
-                foreach (WeatherForecast f in changed)
+                // 変更した行を BulkUpdateBatchSize 行ずつ、1 回の UPDATE でまとめて更新する (BULK UPDATE)。
+                // 分割した UPDATE も同じトランザクション内なので、競合やエラーがあれば全件取り消される。
+                // SQL 文は Sql/WeatherForecast/Update_PostgreSQL.sql / Update_SQLServer.sql (databaseType で切り替わる)
+                // 1 行ごとに (id, 日付, 気温, 概況, 読み込んだ時点の最終更新日) を渡し、VALUES の行に展開される。
+                // 最終更新日が読み込んだ時点と同じ行だけが更新され、更新できた行の id が返る (UpdatedAt は画面で編集しない)
+                HashSet<int> updatedIds = [];
+                foreach (WeatherForecast[] batch in changed.Chunk(BulkUpdateBatchSize))
                 {
-                    // SQL 文は Sql/WeatherForecast/Update.sql。読み込んだ時点の最終更新日 (UpdatedAt は画面で編集しない) と
-                    // 今の最終更新日が同じ行だけ更新される。概況が null の場合は DBNull で渡す
-                    int cnt = await db.Database.ExecuteSqlRawAsync(
-                        SqlStore.Get("WeatherForecast/Update"),
-                        f.Date, f.TemperatureC, (object?)f.Summary ?? DBNull.Value, f.Id, f.UpdatedAt);
-
-                    if (cnt != 1)
+                    SqlQuery query = SqlStore.Build("WeatherForecast/Update", new
                     {
-                        conflicts.Add(await DescribeConflictAsync(db, f.Id));
-                    }
+                        rows = batch.Select(f => new object?[] { f.Id, f.Date, f.TemperatureC, f.Summary, f.UpdatedAt }).ToList(),
+                    });
+                    updatedIds.UnionWith(await db.Database.SqlQueryRaw<int>(query.Sql, query.Parameters).ToListAsync());
+                }
+
+                // 更新できなかった行は、読み込んだ後に他の人が変更または削除している
+                List<string> conflicts = [];
+                foreach (WeatherForecast f in changed.Where(f => !updatedIds.Contains(f.Id)))
+                {
+                    conflicts.Add(await DescribeConflictAsync(db, f.Id));
                 }
 
                 if (conflicts.Count > 0)
