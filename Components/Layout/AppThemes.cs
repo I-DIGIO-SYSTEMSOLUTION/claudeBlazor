@@ -17,10 +17,29 @@ public static class AppThemes
 
     public static readonly IReadOnlyList<Item> All =
     [
-        new("default", "標準", WithContrastText(new MudTheme())),
-        Create("green", "グリーン", "#2E7D32", "#66BB6A"),
-        Create("blue", "ブルー", "#1565C0", "#42A5F5"),
-        Create("orange", "オレンジ", "#E65100", "#FFA726"),
+        Create("default", "標準", "#7A4171", "#C270B3"),
+
+        // MudBlazor.Colors (Material Design の色見本) の全色。ライトは Darken3、ダークは Lighten1 を使う
+        // (green / blue / orange は以前からあるテーマのため、保存済みの Cookie が使えるようキーと色を変えない)
+        Create("red", "レッド", Colors.Red.Darken3, Colors.Red.Lighten1),
+        Create("pink", "ピンク", Colors.Pink.Darken3, Colors.Pink.Lighten1),
+        Create("purple", "パープル", Colors.Purple.Darken3, Colors.Purple.Lighten1),
+        Create("deep-purple", "ディープパープル", Colors.DeepPurple.Darken3, Colors.DeepPurple.Lighten1),
+        Create("indigo", "インディゴ", Colors.Indigo.Darken3, Colors.Indigo.Lighten1),
+        Create("blue", "ブルー", Colors.Blue.Darken3, Colors.Blue.Lighten1),
+        Create("light-blue", "ライトブルー", Colors.LightBlue.Darken3, Colors.LightBlue.Lighten1),
+        Create("cyan", "シアン", Colors.Cyan.Darken3, Colors.Cyan.Lighten1),
+        Create("teal", "ティール", Colors.Teal.Darken3, Colors.Teal.Lighten1),
+        Create("green", "グリーン", Colors.Green.Darken3, Colors.Green.Lighten1),
+        Create("light-green", "ライトグリーン", Colors.LightGreen.Darken3, Colors.LightGreen.Lighten1),
+        Create("lime", "ライム", Colors.Lime.Darken3, Colors.Lime.Lighten1),
+        Create("yellow", "イエロー", Colors.Yellow.Darken3, Colors.Yellow.Lighten1),
+        Create("amber", "アンバー", Colors.Amber.Darken3, Colors.Amber.Lighten1),
+        Create("orange", "オレンジ", Colors.Orange.Darken4, Colors.Orange.Lighten1),
+        Create("deep-orange", "ディープオレンジ", Colors.DeepOrange.Darken3, Colors.DeepOrange.Lighten1),
+        Create("brown", "ブラウン", Colors.Brown.Darken3, Colors.Brown.Lighten1),
+        Create("gray", "グレー", Colors.Gray.Darken3, Colors.Gray.Lighten1),
+        Create("blue-gray", "ブルーグレー", Colors.BlueGray.Darken3, Colors.BlueGray.Lighten1),
     ];
 
     /// <summary>キーに一致するテーマを返す。見つからなければ標準テーマ。</summary>

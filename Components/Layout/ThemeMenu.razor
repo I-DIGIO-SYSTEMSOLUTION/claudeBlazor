@@ -1,6 +1,14 @@
 @* テーマ切り替えメニュー（AppBar 右上）。選択状態は親（MainLayout）が持つ *@
+@* テーマが多いので項目を詰めて高さに上限を付け、超えた分はスクロールさせる。
+   ダークモードの切り替えはスクロールで隠れないよう先頭に置く *@
 <MudMenu Icon="@Icons.Material.Filled.Palette" Color="Color.Inherit" AriaLabel="テーマ"
-         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+         Dense="true" MaxHeight="480">
+    <MudMenuItem OnClick="() => IsDarkModeChanged.InvokeAsync(!IsDarkMode)"
+                 Icon="@(IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)">
+        @(IsDarkMode ? "ライトモードにする" : "ダークモードにする")
+    </MudMenuItem>
+    <MudDivider />
     @foreach (var item in AppThemes.All)
     {
         <MudMenuItem OnClick="() => ThemeKeyChanged.InvokeAsync(item.Key)">
@@ -14,11 +22,6 @@
             </div>
         </MudMenuItem>
     }
-    <MudDivider />
-    <MudMenuItem OnClick="() => IsDarkModeChanged.InvokeAsync(!IsDarkMode)"
-                 Icon="@(IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)">
-        @(IsDarkMode ? "ライトモードにする" : "ダークモードにする")
-    </MudMenuItem>
 </MudMenu>
 
 @code {
