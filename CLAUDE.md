@@ -31,7 +31,7 @@ SageMaker のプロキシは `/codeeditor/default/proxy/5000` のプレフィッ
 
 ## 注意点
 
-- UI は MudBlazor（Bootstrap は読み込んでいない）。`MudThemeProvider` などのプロバイダーは `MainLayout.razor` に置いている。`MudNavLink` の `Href` も相対パス（先頭に `/` を付けない）にすること。
+- UI は MudBlazor（Bootstrap は読み込んでいない）。`MudThemeProvider` などのプロバイダーは `MainLayout.razor` に置いている。メニューは `NavMenu.razor` の `MudMenu`（AppBar 右上のドロップダウン）で、`MudMenuItem` の `Href` も相対パス（先頭に `/` を付けない、ホームは `./`）にすること。テーマは `AppThemes.cs` に定義し、AppBar の `ThemeMenu` で切り替える（選択とダークモードは Cookie `MyBlazorApp.Theme` / `MyBlazorApp.DarkMode` に保存し、`MainLayout` がプリレンダリング時に読んで `[PersistentState]` で対話モードへ引き継ぐ。初期表示から選んだ色になる）。
 - パッケージの静的アセット（`_content/MudBlazor/...`）は、Development 環境か publish 後でないと配信されない（Production 環境で `bin/` の dll を直接起動すると 500 になる）。
 - SQL 文は `Sql/` 配下の `*.sql` に書き、`SqlStatementStore`（シングルトン）が起動時にメモリへ読み込み、ファイル変更を検知して読み直す。キーは `Sql/` からの相対パスで拡張子なし（例: `WeatherForecast/Select`）。パラメータは `{0}` 形式で `ExecuteSqlRaw` / `FromSqlRaw` に渡す（SQL 文全体が `string.Format` で処理されるので、コメント内も含めて `{` `}` は `{{` `}}` にしないと FormatException になる）。監視するのはコンテンツルート（= 起動時のカレントディレクトリ）の `Sql/` で、`bin/` 側ではない。
 - 条件が可変な SQL は `SqlStatementStore.Build(name, new { ... })` を使う（`LogicCommon/SqlTemplate.cs`）。`--#if 名前` 〜 `--#endif` の行は引数が指定されたとき（null・空文字・空コレクション以外）だけ残り、`@名前` は位置パラメータに置き換わる（コレクションは IN 句用に要素数分へ展開）。条件を外しても成り立つよう `WHERE 1 = 1` にしておく。例: `Sql/WeatherForecast/Search.sql`。

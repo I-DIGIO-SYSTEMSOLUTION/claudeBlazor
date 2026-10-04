@@ -4,80 +4,145 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<DbContextWeatherForecast> DbFactory
 @inject SqlStatementStore SqlStore
+@inject IDialogService DialogService
 
 <PageTitle>天気予報</PageTitle>
 
-<MudText Typo="Typo.h3" GutterBottom="true">天気予報</MudText>
+@* ページをウィンドウの高さに収め、表を残りの高さいっぱいに広げる (表の中だけスクロールする。app.css の fill-height-*) *@
+<div class="fill-height-page">
+    <MudText Typo="Typo.h3" GutterBottom="true">天気予報</MudText>
 
-<MudText Class="mb-4">PostgreSQL の weather_forecasts テーブルから取得したデータを表示しています。</MudText>
+    <MudText Class="mb-4">PostgreSQL の weather_forecasts テーブルから取得したデータを表示しています。</MudText>
 
-<MudPaper Class="pa-4 mb-4" Elevation="1">
-    <MudStack Row="true" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Spacing="4">
-        <MudSelect T="string" Label="概況 (複数選択)" MultiSelection="true" Clearable="true"
-                   @bind-SelectedValues="selectedSummaries" Style="min-width: 260px;">
-            @foreach (var summary in Summaries)
-            {
-                <MudSelectItem Value="summary">@summary</MudSelectItem>
-            }
-        </MudSelect>
-        <MudNumericField T="int?" Label="最低気温 (℃) 以上" Clearable="true"
-                         @bind-Value="minTemperatureC" Style="max-width: 180px;" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search"
-                   Disabled="isBusy" OnClick="LoadForecastsAsync">
-            検索
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudStack Row="true" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Spacing="4">
+            <MudSelect T="string" Label="概況 (複数選択)" MultiSelection="true" Clearable="true"
+                       @bind-SelectedValues="selectedSummaries" Style="min-width: 260px;">
+                @foreach (var summary in Summaries)
+                {
+                    <MudSelectItem Value="summary">@summary</MudSelectItem>
+                }
+            </MudSelect>
+            <MudNumericField T="int?" Label="最低気温 (℃) 以上" Clearable="true"
+                             @bind-Value="minTemperatureC" Style="max-width: 180px;" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search"
+                       Disabled="isBusy" OnClick="SearchAsync">
+                検索
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudStack Row="true" Class="mb-4" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   Disabled="@(isBusy || forecasts == null)" OnClick="AddRandomForecastAsync">
+            ランダムなデータを 1 行追加
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(isBusy || selectedForecasts.Count == 0)" OnClick="DeleteSelectedForecastsAsync">
+            選択した行を削除 (@selectedForecasts.Count 件)
+        </MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Undo"
+                   Disabled="@(isBusy || changedCount == 0)" OnClick="RevertChanges">
+            変更を元に戻す
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                   Disabled="@(isBusy || changedCount == 0)" OnClick="SaveChangesAsync">
+            変更を保存 (@changedCount 件)
         </MudButton>
     </MudStack>
-</MudPaper>
 
-<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-           Class="mb-4" Disabled="@(isBusy || forecasts == null)" OnClick="AddRandomForecastAsync">
-    ランダムなデータを 1 行追加
-</MudButton>
+    @if (message != null)
+    {
+        <MudAlert Severity="messageSeverity" Class="mb-4">@message</MudAlert>
+    }
 
-@if (message != null)
-{
-    <MudAlert Severity="messageSeverity" Class="mb-4">@message</MudAlert>
-}
-
-@if (errorMessage != null)
-{
-    <MudAlert Severity="Severity.Error">データの取得に失敗しました: @errorMessage</MudAlert>
-}
-else if (forecasts == null)
-{
-    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-    <MudText><em>読み込み中...</em></MudText>
-}
-else
-{
-    <MudTable Items="forecasts" Hover="true" Striped="true" Elevation="1">
-        <HeaderContent>
-            <MudTh>日付</MudTh>
-            <MudTh aria-label="摂氏の気温">気温 (℃)</MudTh>
-            <MudTh aria-label="華氏の気温">気温 (℉)</MudTh>
-            <MudTh>概況</MudTh>
-            <MudTh></MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="日付">@context.Date.ToShortDateString()</MudTd>
-            <MudTd DataLabel="気温 (℃)">@context.TemperatureC</MudTd>
-            <MudTd DataLabel="気温 (℉)">@context.TemperatureF</MudTd>
-            <MudTd DataLabel="概況">@context.Summary</MudTd>
-            <MudTd>
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
-                               aria-label="削除" Disabled="isBusy" OnClick="@(() => DeleteForecastAsync(context.Id))" />
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
-}
+    @if (errorMessage != null)
+    {
+        <MudAlert Severity="Severity.Error">データの取得に失敗しました: @errorMessage</MudAlert>
+    }
+    else if (forecasts == null)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText><em>読み込み中...</em></MudText>
+    }
+    else
+    {
+        @* 表にフォーカスがあるとき Ctrl+A ですべて選択する (表内をクリックすると div にフォーカスが移る) *@
+        <div tabindex="0" class="selectable-table fill-height-table" data-select-all @onkeydown="OnTableKeyDown">
+            @* Dense: 行間を詰める / Bordered: 列の区切り線 / FixedHeader: スクロールしてもヘッダーを固定 / HeaderClass: ヘッダーの色 (app.css)
+               行の選択は OnRowClick で自前で行う (クリック: その行だけ選択 / Ctrl+クリック: 選択・解除の切り替え / Shift+クリック: 範囲選択)
+               編集欄は edit-cell で囲み、クリック・キー操作が行の選択や Ctrl+A の全選択に伝わらないようにする。編集欄の下線は出さない
+               ただし Ctrl・Shift を押している間は編集欄がクリックを受け付けず、行の選択が優先される (App.razor / app.css) *@
+            <MudTable T="WeatherForecast" Items="forecasts" Hover="true" Striped="true" Dense="true" Bordered="true" FixedHeader="true" Elevation="1"
+                      HeaderClass="table-header-colored"
+                      OnRowClick="OnRowClick" RowClassFunc="GetRowClass">
+                <HeaderContent>
+                    <MudTh>ID</MudTh>
+                    <MudTh>日付</MudTh>
+                    <MudTh aria-label="摂氏の気温">気温 (℃)</MudTh>
+                    <MudTh aria-label="華氏の気温">気温 (℉)</MudTh>
+                    <MudTh>概況</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    @* ID は編集不可。行を選択するときはここをクリックする *@
+                    <MudTd DataLabel="ID">@context.Id</MudTd>
+                    <MudTd DataLabel="日付">
+                        <div class="edit-cell" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                            <MudDatePicker Date="@context.Date.ToDateTime(TimeOnly.MinValue)" DateFormat="yyyy/MM/dd"
+                                           DateChanged="@(d => { if (d is DateTime v) context.Date = DateOnly.FromDateTime(v); })"
+                                           Editable="true" Margin="Margin.Dense" Underline="false" Disabled="isBusy" />
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="気温 (℃)">
+                        <div class="edit-cell" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                            <MudNumericField T="int" @bind-Value="context.TemperatureC" HideSpinButtons="true"
+                                             Margin="Margin.Dense" Underline="false" Disabled="isBusy" />
+                        </div>
+                    </MudTd>
+                    @* 華氏は摂氏から計算する値なので編集不可 (摂氏を変えると連動して変わる) *@
+                    <MudTd DataLabel="気温 (℉)">@context.TemperatureF</MudTd>
+                    <MudTd DataLabel="概況">
+                        <div class="edit-cell" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                            <MudSelect T="string" @bind-Value="context.Summary" Margin="Margin.Dense" Underline="false" Disabled="isBusy">
+                                @foreach (var summary in Summaries)
+                                {
+                                    <MudSelectItem Value="summary">@summary</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </div>
+                    </MudTd>
+                    @* 作成日・最終更新日は表示しない (最終更新日は保存時に他の人の変更を検出するためだけに使う) *@
+                </RowTemplate>
+            </MudTable>
+        </div>
+    }
+</div>
 
 @code {
     private WeatherForecast[]? forecasts;
+    private HashSet<WeatherForecast> selectedForecasts = [];
+
+    // 取得した時点の値 (id ごと)。画面上の値と比べて変更された行を判定し、「変更を元に戻す」でもこの値に戻す
+    private record ForecastValues(DateOnly Date, int TemperatureC, string? Summary)
+    {
+        public static ForecastValues From(WeatherForecast f) => new(f.Date, f.TemperatureC, f.Summary);
+    }
+    private Dictionary<int, ForecastValues> originalValues = [];
+
+    private IEnumerable<WeatherForecast> ChangedForecasts =>
+        forecasts?.Where(f => ForecastValues.From(f) != originalValues[f.Id]) ?? [];
+
+    // ボタンの表示用。描画のたびに ChangedForecasts を数える
+    private int changedCount => ChangedForecasts.Count();
+
+    // Shift+クリックの範囲選択の起点 (最後に通常クリック・Ctrl+クリックした行)
+    private int? lastClickedIndex;
     private string? errorMessage;
     private string? message;
     private Severity messageSeverity = Severity.Info;
 
-    // 追加・削除の処理中はボタンを無効にして二重実行を防ぐ
+    // 追加・削除・保存の処理中はボタンを無効にして二重実行を防ぐ
     private bool isBusy;
 
     // 検索条件 (未指定のものは WHERE 句から外れる)
@@ -108,6 +173,10 @@ else
                 .FromSqlRaw(query.Sql, query.Parameters)
                 .AsNoTracking()
                 .ToArrayAsync();
+            originalValues = forecasts.ToDictionary(f => f.Id, ForecastValues.From);
+            // 再取得すると別のインスタンスになるため、選択は解除する
+            selectedForecasts = [];
+            lastClickedIndex = null;
         }
         catch (Exception ex)
         {
@@ -115,9 +184,120 @@ else
         }
     }
 
+    private async Task SearchAsync()
+    {
+        if (!await ConfirmDiscardChangesAsync()) return;
+        message = null;
+        await LoadForecastsAsync();
+    }
+
+    // 保存していない変更がある場合、一覧を読み直す前に破棄してよいか確認する
+    private async Task<bool> ConfirmDiscardChangesAsync()
+    {
+        int count = changedCount;
+        if (count == 0) return true;
+
+        bool? confirmed = await DialogService.ShowMessageBoxAsync(
+            "変更の破棄", $"保存していない変更が {count} 件あります。変更を破棄して続けますか？",
+            yesText: "破棄して続ける", cancelText: "キャンセル");
+        return confirmed == true;
+    }
+
+    private void RevertChanges()
+    {
+        if (forecasts == null) return;
+        foreach (WeatherForecast f in forecasts)
+        {
+            ForecastValues original = originalValues[f.Id];
+            f.Date = original.Date;
+            f.TemperatureC = original.TemperatureC;
+            f.Summary = original.Summary;
+        }
+        message = null;
+    }
+
+    // 変更した行をまとめて更新する。1 件でも失敗したら全件取り消し、画面の変更はそのまま残す (直して再度保存できるように)
+    // 読み込んだ後に他の人が変更・削除した行 (最終更新日が変わっている行) があれば、上書きせずに保存をやめ、どの行かを表示する
+    private async Task SaveChangesAsync()
+    {
+        List<WeatherForecast> changed = ChangedForecasts.ToList();
+        if (changed.Count == 0) return;
+
+        message = null;
+        isBusy = true;
+        try
+        {
+            await using (var db = await DbFactory.CreateDbContextAsync())
+            await using (var tx = await db.Database.BeginTransactionAsync())
+            {
+                List<string> conflicts = [];
+                foreach (WeatherForecast f in changed)
+                {
+                    // SQL 文は Sql/WeatherForecast/Update.sql。読み込んだ時点の最終更新日 (UpdatedAt は画面で編集しない) と
+                    // 今の最終更新日が同じ行だけ更新される。概況が null の場合は DBNull で渡す
+                    int cnt = await db.Database.ExecuteSqlRawAsync(
+                        SqlStore.Get("WeatherForecast/Update"),
+                        f.Date, f.TemperatureC, (object?)f.Summary ?? DBNull.Value, f.Id, f.UpdatedAt);
+
+                    if (cnt != 1)
+                    {
+                        conflicts.Add(await DescribeConflictAsync(db, f.Id));
+                    }
+                }
+
+                if (conflicts.Count > 0)
+                {
+                    await tx.RollbackAsync();
+                    ShowMessage(Severity.Error,
+                        "変更を保存できませんでした。読み込んだ後に他の人が変更したデータがあります: " +
+                        string.Join(" / ", conflicts) +
+                        "。データベースは更新していません。最新のデータは「検索」で読み込めます (画面の変更は破棄されます)。");
+                    return;
+                }
+
+                await tx.CommitAsync();
+            }
+
+            ShowMessage(Severity.Success, $"{changed.Count} 件の変更を保存しました (id = {string.Join(", ", changed.Select(f => f.Id))})。");
+            await LoadForecastsAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage(Severity.Error,
+                $"変更を保存できませんでした: {ex.InnerException?.Message ?? ex.Message} データベースは更新していません。");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    // 保存・削除できなかった行の、今のデータベースの状態を説明する文を作る (削除されたのか、どう変更されたのか)
+    private async Task<string> DescribeConflictAsync(DbContextWeatherForecast db, int id)
+    {
+        // SQL 文は Sql/WeatherForecast/SelectById.sql
+        WeatherForecast? current = (await db.WeatherForecasts
+            .FromSqlRaw(SqlStore.Get("WeatherForecast/SelectById"), id)
+            .AsNoTracking()
+            .ToListAsync())
+            .FirstOrDefault();
+
+        return current == null
+            ? $"id = {id} は削除されています"
+            : $"id = {id} は {FormatTimestamp(current.UpdatedAt)} に {current.Date:yyyy/MM/dd} {current.TemperatureC}℃ {current.Summary} に変更されています";
+    }
+
+    // DB の日時 (UTC) を日本時間で表示する (サーバーのタイムゾーンは UTC のため明示的に変換する)
+    private static readonly TimeZoneInfo DisplayTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
+
+    private static string FormatTimestamp(DateTime utc) =>
+        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), DisplayTimeZone).ToString("yyyy/MM/dd HH:mm:ss");
+
     // 更新系の SQL はページ表示時 (事前描画と接続後で 2 回呼ばれる) ではなく、ボタン操作で実行する
     private async Task AddRandomForecastAsync()
     {
+        if (!await ConfirmDiscardChangesAsync()) return;
+
         message = null;
         isBusy = true;
         try
@@ -159,8 +339,68 @@ else
         }
     }
 
-    private async Task DeleteForecastAsync(int id)
+    // エクスプローラーと同じ操作で行を選択する (Mac の Command キーは Ctrl と同じ扱い)
+    private void OnRowClick(TableRowClickEventArgs<WeatherForecast> e)
     {
+        if (forecasts == null || e.Item == null || isBusy) return;
+
+        int index = Array.IndexOf(forecasts, e.Item);
+        bool ctrl = e.MouseEventArgs.CtrlKey || e.MouseEventArgs.MetaKey;
+
+        if (e.MouseEventArgs.ShiftKey && lastClickedIndex is int anchor)
+        {
+            // 起点からクリックした行までを選択する。Ctrl も押していれば今の選択に追加する
+            if (!ctrl) selectedForecasts.Clear();
+            for (int i = Math.Min(anchor, index); i <= Math.Max(anchor, index); i++)
+            {
+                selectedForecasts.Add(forecasts[i]);
+            }
+            return;
+        }
+
+        if (ctrl)
+        {
+            if (!selectedForecasts.Remove(e.Item)) selectedForecasts.Add(e.Item);
+        }
+        else
+        {
+            selectedForecasts = [e.Item];
+        }
+        lastClickedIndex = index;
+    }
+
+    private void OnTableKeyDown(KeyboardEventArgs e)
+    {
+        if (forecasts == null || isBusy) return;
+
+        if ((e.CtrlKey || e.MetaKey) && e.Key is "a" or "A")
+        {
+            selectedForecasts = [.. forecasts];
+        }
+    }
+
+    // 選択中の行は背景色、変更した行は左端に印を付ける (app.css)
+    private string GetRowClass(WeatherForecast item, int rowNumber)
+    {
+        string cls = "selectable-row";
+        if (selectedForecasts.Contains(item)) cls += " selected-row";
+        if (ForecastValues.From(item) != originalValues[item.Id]) cls += " changed-row";
+        return cls;
+    }
+
+    // 選択した行をまとめて削除する。読み込んだ後に他の人が変更・削除した行 (最終更新日が変わっている行) があれば、
+    // 全件取り消して、どの行かを表示する
+    private async Task DeleteSelectedForecastsAsync()
+    {
+        if (selectedForecasts.Count == 0) return;
+
+        List<WeatherForecast> targets = selectedForecasts.OrderBy(f => f.Id).ToList();
+        // 削除後は一覧を読み直すため、保存していない変更は破棄される
+        string discardNote = changedCount > 0 ? $" (保存していない変更 {changedCount} 件は破棄されます)" : "";
+        bool? confirmed = await DialogService.ShowMessageBoxAsync(
+            "削除の確認", $"選択した {targets.Count} 件を削除しますか？{discardNote}", yesText: "削除", cancelText: "キャンセル");
+        if (confirmed != true) return;
+
         message = null;
         isBusy = true;
         try
@@ -168,26 +408,38 @@ else
             await using (var db = await DbFactory.CreateDbContextAsync())
             await using (var tx = await db.Database.BeginTransactionAsync())
             {
-                // SQL 文は Sql/WeatherForecast/Delete.sql。{0} に id がパラメータとして入る
-                int cnt = await db.Database.ExecuteSqlRawAsync(
-                    SqlStore.Get("WeatherForecast/Delete"), id);
+                List<string> conflicts = [];
+                foreach (WeatherForecast f in targets)
+                {
+                    // SQL 文は Sql/WeatherForecast/Delete.sql。読み込んだ時点の最終更新日と今の最終更新日が同じ行だけ削除される
+                    int cnt = await db.Database.ExecuteSqlRawAsync(
+                        SqlStore.Get("WeatherForecast/Delete"), f.Id, f.UpdatedAt);
 
-                if (cnt != 1)
+                    if (cnt != 1)
+                    {
+                        conflicts.Add(await DescribeConflictAsync(db, f.Id));
+                    }
+                }
+
+                if (conflicts.Count > 0)
                 {
                     await tx.RollbackAsync();
-                    ShowMessage(Severity.Warning, $"削除対象のデータが見つかりませんでした (id = {id})。");
+                    ShowMessage(Severity.Error,
+                        "削除できませんでした。読み込んだ後に他の人が変更したデータがあります: " +
+                        string.Join(" / ", conflicts) +
+                        "。データベースは更新していません。最新のデータは「検索」で読み込めます。");
                     return;
                 }
 
                 await tx.CommitAsync();
             }
 
-            ShowMessage(Severity.Success, $"削除しました (id = {id})。");
+            ShowMessage(Severity.Success, $"{targets.Count} 件削除しました (id = {string.Join(", ", targets.Select(f => f.Id))})。");
             await LoadForecastsAsync();
         }
         catch (Exception ex)
         {
-            ShowMessage(Severity.Error, $"削除に失敗しました: {ex.Message}");
+            ShowMessage(Severity.Error, $"削除できませんでした: {ex.InnerException?.Message ?? ex.Message} データベースは更新していません。");
         }
         finally
         {

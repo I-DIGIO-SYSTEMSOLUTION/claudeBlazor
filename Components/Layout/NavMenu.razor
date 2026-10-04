@@ -1,6 +1,8 @@
-﻿@* プロキシ配下で動かすため、Href は先頭に / を付けない相対パスにする *@
-<MudNavMenu>
-    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">ホーム</MudNavLink>
-    <MudNavLink Href="counter" Icon="@Icons.Material.Filled.AddBox">カウンター</MudNavLink>
-    <MudNavLink Href="weather" Icon="@Icons.Material.Filled.Cloud">天気予報</MudNavLink>
-</MudNavMenu>
+﻿@* プロキシ配下で動かすため、Href は先頭に / を付けない相対パスにする（ホームは空文字だとリンクにならないので "./"） *@
+@* ボタンをもう一度押すか、メニューの外側をクリックすると閉じる *@
+<MudMenu Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" AriaLabel="メニュー"
+         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+    <MudMenuItem Href="./" Icon="@Icons.Material.Filled.Home">ホーム</MudMenuItem>
+    <MudMenuItem Href="counter" Icon="@Icons.Material.Filled.AddBox">カウンター</MudMenuItem>
+    <MudMenuItem Href="weather" Icon="@Icons.Material.Filled.Cloud">天気予報</MudMenuItem>
+</MudMenu>

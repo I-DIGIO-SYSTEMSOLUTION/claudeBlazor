@@ -1,21 +1,20 @@
 ﻿@inherits LayoutComponentBase
+@inject IJSRuntime JS
 
-<MudThemeProvider />
+<MudThemeProvider Theme="@AppThemes.Find(themeKey).Theme" IsDarkMode="isDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
     <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6" Class="ml-2">MyBlazorApp</MudText>
+        <MudText Typo="Typo.h6">MyBlazorApp</MudText>
         <MudSpacer />
-        <MudLink Href="https://learn.microsoft.com/aspnet/core/" Target="_blank" Color="Color.Inherit">このアプリについて</MudLink>
-    </MudAppBar>
-
-    <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
+        <MudLink Href="https://learn.microsoft.com/aspnet/core/" Target="_blank" Color="Color.Inherit" Class="mr-2">このアプリについて</MudLink>
+        <ThemeMenu ThemeKey="@themeKey" ThemeKeyChanged="ChangeThemeAsync"
+                   IsDarkMode="isDarkMode" IsDarkModeChanged="ChangeDarkModeAsync" />
         <NavMenu />
-    </MudDrawer>
+    </MudAppBar>
 
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.Large" Class="py-4">
@@ -30,8 +29,61 @@
     <span class="dismiss">🗙</span>
 </div>
 
-@code {
-    private bool drawerOpen = true;
 
-    private void ToggleDrawer() => drawerOpen = !drawerOpen;
+@code {
+    // 選んだテーマは Cookie に保存する。プリレンダリング (最初の HTML) の時点でサーバーが Cookie を読んでテーマを決めるので、
+    // 初期表示から選んだテーマの色になる (localStorage だと表示後にしか読めず、一瞬既定の色が出てしまう)
+    private const string ThemeKeyCookieName = "MyBlazorApp.Theme";
+    private const string DarkModeCookieName = "MyBlazorApp.DarkMode";
+
+    // プリレンダリング中だけ値が入る (対話モードになると null)
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    // プリレンダリングで決めた値を、対話モードの描画に引き継ぐ (対話モードでは HttpContext が使えないため)
+    [PersistentState]
+    public string? PersistedThemeKey { get; set; }
+
+    [PersistentState]
+    public bool? PersistedDarkMode { get; set; }
+
+    private string themeKey = AppThemes.All[0].Key;
+    private bool isDarkMode;
+
+    protected override void OnInitialized()
+    {
+        if (HttpContext != null)
+        {
+            PersistedThemeKey = HttpContext.Request.Cookies[ThemeKeyCookieName];
+            PersistedDarkMode = HttpContext.Request.Cookies[DarkModeCookieName] == "true";
+        }
+
+        themeKey = AppThemes.Find(PersistedThemeKey).Key;
+        isDarkMode = PersistedDarkMode ?? false;
+    }
+
+    private async Task ChangeThemeAsync(string key)
+    {
+        themeKey = key;
+        await SaveAsync(ThemeKeyCookieName, key);
+    }
+
+    private async Task ChangeDarkModeAsync(bool value)
+    {
+        isDarkMode = value;
+        await SaveAsync(DarkModeCookieName, value ? "true" : "false");
+    }
+
+    // Cookie の書き込みは App.razor の appCookie.set (JS) で行う
+    private async Task SaveAsync(string name, string value)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("appCookie.set", name, value);
+        }
+        catch (JSException)
+        {
+            // 保存できなくても画面上の切り替えは有効
+        }
+    }
 }

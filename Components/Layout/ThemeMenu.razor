@@ -1,0 +1,30 @@
+@* テーマ切り替えメニュー（AppBar 右上）。選択状態は親（MainLayout）が持つ *@
+<MudMenu Icon="@Icons.Material.Filled.Palette" Color="Color.Inherit" AriaLabel="テーマ"
+         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+    @foreach (var item in AppThemes.All)
+    {
+        <MudMenuItem OnClick="() => ThemeKeyChanged.InvokeAsync(item.Key)">
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"color: {item.SampleColor}")" />
+                <span class="flex-grow-1">@item.Name</span>
+                @if (item.Key == ThemeKey)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                }
+            </div>
+        </MudMenuItem>
+    }
+    <MudDivider />
+    <MudMenuItem OnClick="() => IsDarkModeChanged.InvokeAsync(!IsDarkMode)"
+                 Icon="@(IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)">
+        @(IsDarkMode ? "ライトモードにする" : "ダークモードにする")
+    </MudMenuItem>
+</MudMenu>
+
+@code {
+    [Parameter] public string ThemeKey { get; set; } = AppThemes.All[0].Key;
+    [Parameter] public EventCallback<string> ThemeKeyChanged { get; set; }
+
+    [Parameter] public bool IsDarkMode { get; set; }
+    [Parameter] public EventCallback<bool> IsDarkModeChanged { get; set; }
+}

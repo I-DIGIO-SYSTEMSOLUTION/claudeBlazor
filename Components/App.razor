@@ -42,6 +42,41 @@
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+    <script>
+        // Cookie の書き込み (MainLayout のテーマ保存で使う)。有効期限 1 年。
+        // プロキシ配下でもサーバーに送られるよう path はドメイン直下にする
+        window.appCookie = {
+            set: function (name, value) {
+                document.cookie = encodeURIComponent(name) + "=" + encodeURIComponent(value) +
+                    "; path=/; max-age=31536000; samesite=lax";
+            }
+        };
+
+        // Ctrl (Mac は Command)・Shift を押している間、html 要素に row-select-key クラスを付ける。
+        // 表の編集欄はこのクラスがある間クリックを受け付けなくなり (app.css)、クリックが行の選択に使われる。
+        // 入力欄の中のキー操作も確実に拾うため、window のキャプチャ段階で受け取る
+        (function () {
+            function update(e) {
+                document.documentElement.classList.toggle("row-select-key", e.ctrlKey || e.metaKey || e.shiftKey);
+            }
+            window.addEventListener("keydown", update, true);
+            window.addEventListener("keyup", update, true);
+            // キーを押したまま別のウィンドウに移ると keyup が来ないので、戻ったときに外す
+            window.addEventListener("blur", function () {
+                document.documentElement.classList.remove("row-select-key");
+            });
+        })();
+
+        // data-select-all 属性を付けた要素の中で Ctrl+A (Mac は Command+A) を押したとき、ブラウザ標準の「ページ全体の文字を選択」を止める。
+        // 全選択そのものは各ページの onkeydown イベントで行う (Blazor 側の preventDefault 指定は全キーに効いてしまうためここで処理する)
+        // 入力欄の中の Ctrl+A は、入力した文字の全選択として通常どおり動かす
+        document.addEventListener("keydown", function (e) {
+            if (e.target.closest && e.target.closest("input, textarea, [contenteditable]")) return;
+            if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A") && e.target.closest && e.target.closest("[data-select-all]")) {
+                e.preventDefault();
+            }
+        });
+    </script>
 </body>
 
 </html>
