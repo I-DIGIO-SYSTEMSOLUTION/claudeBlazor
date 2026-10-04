@@ -9,12 +9,9 @@ namespace DatabaseLogic
     public sealed class DatabaseAccessLogicSingleton
     {
 
-        // シングルトンフラグ
+        // シングルトンフラグ (Lazy<T> は既定でスレッドセーフなので lock は不要)
         private static readonly Lazy<DatabaseAccessLogicSingleton> _instance =
             new(() => new DatabaseAccessLogicSingleton());
-
-        // Lock用オブジェクト
-        private static readonly object _lockObject = new();
 
         private static readonly log4net.ILog logger =
             log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
@@ -33,16 +30,7 @@ namespace DatabaseLogic
             Init();
         }
 
-        public static DatabaseAccessLogicSingleton GetInstance
-        {
-            get
-            {
-                lock (_lockObject)
-                {
-                    return _instance.Value;
-                }
-            }
-        }
+        public static DatabaseAccessLogicSingleton GetInstance => _instance.Value;
 
         //初期化処理
         public void Init()

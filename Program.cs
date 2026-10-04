@@ -12,6 +12,8 @@ builder.Services.AddMudServices();
 // DB 種別 (SQLServer / PostgreSQL) と接続文字列は Setting/databaseCommonConnectionSetting.xml から読み込む
 builder.Services.AddDbContextFactory<DbContextImageAnnotationComment>(
     options => DatabaseAccessLogicSingleton.GetInstance.ConfigureDbContext(options));
+builder.Services.AddDbContextFactory<DbContextWeatherForecast>(
+    options => DatabaseAccessLogicSingleton.GetInstance.ConfigureDbContext(options));
 
 var app = builder.Build();
 

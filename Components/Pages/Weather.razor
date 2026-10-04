@@ -1,13 +1,20 @@
 ﻿@page "/weather"
 @attribute [StreamRendering]
+@using LogicCommon
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<DbContextWeatherForecast> DbFactory
 
 <PageTitle>天気予報</PageTitle>
 
 <MudText Typo="Typo.h3" GutterBottom="true">天気予報</MudText>
 
-<MudText Class="mb-4">このコンポーネントはデータの表示例です。</MudText>
+<MudText Class="mb-4">PostgreSQL の weather_forecasts テーブルから取得したデータを表示しています。</MudText>
 
-@if (forecasts == null)
+@if (errorMessage != null)
+{
+    <MudAlert Severity="Severity.Error">データの取得に失敗しました: @errorMessage</MudAlert>
+}
+else if (forecasts == null)
 {
     <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
     <MudText><em>読み込み中...</em></MudText>
@@ -32,27 +39,21 @@ else
 
 @code {
     private WeatherForecast[]? forecasts;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
-        // ストリーミング レンダリングを示すため、非同期の読み込みを模擬する
-        await Task.Delay(500);
-
-        var startDate = DateOnly.FromDateTime(DateTime.Now);
-        var summaries = new[] { "極寒", "厳寒", "肌寒い", "涼しい", "穏やか", "暖かい", "心地よい", "暑い", "蒸し暑い", "酷暑" };
-        forecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
+        try
         {
-            Date = startDate.AddDays(index),
-            TemperatureC = Random.Shared.Next(-20, 55),
-            Summary = summaries[Random.Shared.Next(summaries.Length)]
-        }).ToArray();
-    }
-
-    private class WeatherForecast
-    {
-        public DateOnly Date { get; set; }
-        public int TemperatureC { get; set; }
-        public string? Summary { get; set; }
-        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            forecasts = await db.WeatherForecasts
+                .AsNoTracking()
+                .OrderBy(f => f.Date)
+                .ToArrayAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
     }
 }
