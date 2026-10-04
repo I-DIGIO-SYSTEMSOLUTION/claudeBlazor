@@ -49,6 +49,10 @@ namespace LogicCommon
         [Column("password_changed_at")]
         public DateTime? PasswordChangedAt { get; set; }
 
+        // 有効期限切れの警告ダイアログを最後に表示した日時 (1 日 1 回だけ表示するため)
+        [Column("password_expiry_notified_at")]
+        public DateTime? PasswordExpiryNotifiedAt { get; set; }
+
         [Column("mfa_enabled")]
         public bool MfaEnabled { get; set; }
 

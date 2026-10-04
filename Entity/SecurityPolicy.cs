@@ -69,6 +69,10 @@ namespace LogicCommon
         [Column("password_expiry_days")]
         public int PasswordExpiryDays { get; set; }
 
+        // 有効期限の何日前からログイン時に変更を勧めるか (0 は知らせない)
+        [Column("password_expiry_warning_days")]
+        public int PasswordExpiryWarningDays { get; set; }
+
         // パスワードリセット
         [Column("password_reset_token_minutes")]
         public int PasswordResetTokenMinutes { get; set; }

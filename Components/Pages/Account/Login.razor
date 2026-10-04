@@ -9,6 +9,26 @@
 
 <PageTitle>ログイン</PageTitle>
 
+@* パスワードの有効期限が近いときの確認 (ログインの直後に出す) *@
+<MudDialog @bind-Visible="expiringVisible" Options="expiringDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">パスワードの有効期限が近づいています</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (expiring != null)
+        {
+            <MudText>
+                パスワードの有効期限まで、あと <b>@expiring.DaysUntilExpiry 日</b> です (@AppTime.Format(expiring.PasswordExpiresAt) まで)。
+            </MudText>
+            <MudText>今すぐパスワードを変更しますか？</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Disabled="busy" OnClick="() => ContinueSignInAsync(changePassword: false)">あとで変更する</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="busy" OnClick="() => ContinueSignInAsync(changePassword: true)">今すぐ変更する</MudButton>
+    </DialogActions>
+</MudDialog>
+
 <MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="mt-8">
     <MudPaper Class="pa-6" Elevation="2">
         <MudText Typo="Typo.h5" GutterBottom="true">ログイン</MudText>
@@ -75,6 +95,11 @@
     // プリレンダリングで確認した結果を対話モードに引き継ぐ
     [PersistentState] public bool? SetupRequired { get; set; }
     private bool busy;
+
+    // パスワードの有効期限が近いときの確認ダイアログ
+    private LoginResult? expiring;
+    private bool expiringVisible;
+    private readonly DialogOptions expiringDialogOptions = new() { BackdropClick = false, CloseOnEscapeKey = false, CloseButton = false };
     // パスワードを文字で表示するか (目のアイコンで切り替える)
     private bool showPassword;
 
@@ -131,11 +156,14 @@
             switch (result.Status)
             {
                 case LoginStatus.Succeeded:
-                    // Cookie の発行は HTTP のエンドポイントで行う (対話モードの画面からは発行できないため)
-                    string returnUrl = Uri.EscapeDataString(AppUrl.SanitizeReturnUrl(ReturnUrl));
-                    Nav.NavigateTo($"{AuthConstants.SignInPath}?ticket={Uri.EscapeDataString(result.Ticket!)}&returnUrl={returnUrl}",
-                        forceLoad: true);
+                    GoToSignIn(result.Ticket!, AppUrl.SanitizeReturnUrl(ReturnUrl));
                     return;
+
+                case LoginStatus.PasswordExpiringSoon:
+                    // 変更するかを確認してからサインインする
+                    expiring = result;
+                    expiringVisible = true;
+                    break;
 
                 case LoginStatus.PasswordExpired:
                     Nav.NavigateTo($"{AuthConstants.ResetPasswordPath}?token={Uri.EscapeDataString(result.ResetToken!)}&expired=true");
@@ -161,5 +189,41 @@
             busy = false;
         }
         model.Password = "";
+    }
+
+    // 確認ダイアログで選んだ後にサインインする。「今すぐ変更する」ならサインイン後にパスワード変更画面を開く
+    private async Task ContinueSignInAsync(bool changePassword)
+    {
+        if (busy || expiring?.PendingSignIn == null)
+        {
+            return;
+        }
+        busy = true;
+        try
+        {
+            string? ticket = await LoginService.CompleteSignInAsync(expiring.PendingSignIn, ClientInfo);
+            if (ticket == null)
+            {
+                return;
+            }
+            GoToSignIn(ticket, changePassword ? "change-password?reason=expiring" : AppUrl.SanitizeReturnUrl(ReturnUrl));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "ログインの処理でエラーが発生しました。");
+            expiringVisible = false;
+            errors = ["ログインの処理中にエラーが発生しました。しばらくしてからもう一度お試しください。"];
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    // Cookie の発行は HTTP のエンドポイントで行う (対話モードの画面からは発行できないため)
+    private void GoToSignIn(string ticket, string returnUrl)
+    {
+        Nav.NavigateTo($"{AuthConstants.SignInPath}?ticket={Uri.EscapeDataString(ticket)}&returnUrl={Uri.EscapeDataString(returnUrl)}",
+            forceLoad: true);
     }
 }

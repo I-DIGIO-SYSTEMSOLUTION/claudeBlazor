@@ -38,6 +38,7 @@ CREATE TABLE security_policies (
     disallow_login_id            bit           NOT NULL DEFAULT 1,
     password_history_count       int           NOT NULL DEFAULT 3,
     password_expiry_days         int           NOT NULL DEFAULT 0,
+    password_expiry_warning_days int           NOT NULL DEFAULT 7,
 
     -- パスワードリセット
     password_reset_token_minutes int           NOT NULL DEFAULT 30,
@@ -67,6 +68,7 @@ CREATE TABLE security_policies (
     CONSTRAINT ck_security_policies_char_types      CHECK (min_char_types BETWEEN 0 AND 4),
     CONSTRAINT ck_security_policies_history         CHECK (password_history_count >= 0),
     CONSTRAINT ck_security_policies_expiry          CHECK (password_expiry_days >= 0),
+    CONSTRAINT ck_security_policies_expiry_warning  CHECK (password_expiry_warning_days >= 0),
     CONSTRAINT ck_security_policies_reset_token     CHECK (password_reset_token_minutes >= 1),
     CONSTRAINT ck_security_policies_idle_timeout    CHECK (idle_timeout_minutes >= 1),
     CONSTRAINT ck_security_policies_timeout_warning CHECK (timeout_warning_seconds >= 0
@@ -122,6 +124,7 @@ CREATE TABLE users (
     locked_until          datetime2      NULL,
     last_login_at         datetime2      NULL,
     password_changed_at   datetime2      NULL,
+    password_expiry_notified_at datetime2 NULL,
     mfa_enabled           bit            NOT NULL DEFAULT 0,
     mfa_method            nvarchar(10)   NULL,
     totp_secret_encrypted nvarchar(512)  NULL,
@@ -295,6 +298,7 @@ EXEC sys.sp_addextendedproperty N'MS_Description', N'英大文字・英小文字
 EXEC sys.sp_addextendedproperty N'MS_Description', N'ログインID を含むパスワードを禁止するか', N'SCHEMA', N'dbo', N'TABLE', N'security_policies', N'COLUMN', N'disallow_login_id';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'現在のパスワードを含む直近何世代の再利用を禁止するか (0 は制限なし)', N'SCHEMA', N'dbo', N'TABLE', N'security_policies', N'COLUMN', N'password_history_count';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'パスワード有効期限 (日、0 は無期限)', N'SCHEMA', N'dbo', N'TABLE', N'security_policies', N'COLUMN', N'password_expiry_days';
+EXEC sys.sp_addextendedproperty N'MS_Description', N'パスワードの有効期限の何日前からログイン時に変更を勧めるか (0 は知らせない)', N'SCHEMA', N'dbo', N'TABLE', N'security_policies', N'COLUMN', N'password_expiry_warning_days';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'パスワードリセットリンクの有効期限 (分)', N'SCHEMA', N'dbo', N'TABLE', N'security_policies', N'COLUMN', N'password_reset_token_minutes';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'最後の操作 (またはサーバー処理の終了) からログアウトまでの時間 (分)', N'SCHEMA', N'dbo', N'TABLE', N'security_policies', N'COLUMN', N'idle_timeout_minutes';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'ログアウト前に警告を出す秒数 (0 は警告なし)', N'SCHEMA', N'dbo', N'TABLE', N'security_policies', N'COLUMN', N'timeout_warning_seconds';
@@ -332,6 +336,7 @@ EXEC sys.sp_addextendedproperty N'MS_Description', N'最後にログインに失
 EXEC sys.sp_addextendedproperty N'MS_Description', N'ロックアウト解除日時 (この日時まではログイン不可)', N'SCHEMA', N'dbo', N'TABLE', N'users', N'COLUMN', N'locked_until';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'最終ログイン日時', N'SCHEMA', N'dbo', N'TABLE', N'users', N'COLUMN', N'last_login_at';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'パスワード変更日時 (有効期限の判定用)', N'SCHEMA', N'dbo', N'TABLE', N'users', N'COLUMN', N'password_changed_at';
+EXEC sys.sp_addextendedproperty N'MS_Description', N'有効期限切れの警告ダイアログを最後に表示した日時 (警告は 1 日 1 回だけ表示する)', N'SCHEMA', N'dbo', N'TABLE', N'users', N'COLUMN', N'password_expiry_notified_at';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'追加認証 (ワンタイムパスワード) を行うか', N'SCHEMA', N'dbo', N'TABLE', N'users', N'COLUMN', N'mfa_enabled';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'追加認証の方式 (TOTP / EMAIL / SMS)', N'SCHEMA', N'dbo', N'TABLE', N'users', N'COLUMN', N'mfa_method';
 EXEC sys.sp_addextendedproperty N'MS_Description', N'TOTP のシークレット (ASP.NET Core Data Protection で暗号化。用途: MyBlazorApp.TotpSecret)', N'SCHEMA', N'dbo', N'TABLE', N'users', N'COLUMN', N'totp_secret_encrypted';

@@ -7,8 +7,10 @@
     <MudMenuItem Href="./" Icon="@Icons.Material.Filled.Home">ホーム</MudMenuItem>
     <MudMenuItem Href="counter" Icon="@Icons.Material.Filled.AddBox">カウンター</MudMenuItem>
     <MudMenuItem Href="weather" Icon="@Icons.Material.Filled.Cloud">天気予報</MudMenuItem>
+    @* 管理者 (ADMIN ロール) のときだけ表示する。画面側でも [Authorize(Roles = ...)] で管理者以外は開けない *@
     <AuthorizeView Roles="@AuthConstants.AdminRole">
         <MudMenuItem Href="users" Icon="@Icons.Material.Filled.ManageAccounts">ユーザー管理</MudMenuItem>
+        <MudMenuItem Href="password-policy" Icon="@Icons.Material.Filled.Policy">パスワードポリシー</MudMenuItem>
     </AuthorizeView>
     <MudDivider />
     <MudMenuItem Href="change-password" Icon="@Icons.Material.Filled.Password">パスワード変更</MudMenuItem>

@@ -5,6 +5,10 @@ namespace LogicCommon
     {
         private static readonly TimeZoneInfo DisplayTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
 
+        // 日本時間の日付 (「1 日 1 回」の判定などに使う)
+        public static DateOnly ToDisplayDate(DateTime utc) =>
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), DisplayTimeZone));
+
         public static string Format(DateTime? utc, string format = "yyyy/MM/dd HH:mm")
         {
             if (utc is not DateTime value)

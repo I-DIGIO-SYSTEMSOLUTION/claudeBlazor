@@ -42,7 +42,7 @@ SageMaker のプロキシは `/codeeditor/default/proxy/5000` のプレフィッ
 
 ## ログイン機能
 
-設計と決定事項は `docs/login-design.md`。処理は `Logic/Authentication/`、テーブルは `users` / `user_sessions` / `user_tokens` / `login_histories` / `security_policies` など（外部キーは設定しない方針）。テーブルの DDL は `Ddl/CreateAuthTables_<DB 種別>.sql`（`Ddl/` はアプリが読み込む `Sql/` とは別のフォルダ）。SQL Server では日時を `datetime2` に UTC で持つ（Entity が `DateTime` のため）。
+設計と決定事項は `docs/login-design.md`。処理は `Logic/Authentication/`、テーブルは `users` / `user_sessions` / `user_tokens` / `login_histories` / `security_policies` など（外部キーは設定しない方針）。テーブルの DDL は `Ddl/CreateAuthTables_<DB 種別>.sql`（`Ddl/` はアプリが読み込む `Sql/` とは別のフォルダ）。リリース前の開発中なので、列を追加・変更したときは変更用の SQL は作らず、`CreateAuthTables`（PostgreSQL 版と SQL Server 版）と `docs/login-design.md` の DDL を直接直す（開発用の DB には ALTER 文を手で流す）。SQL Server では日時を `datetime2` に UTC で持つ（Entity が `DateTime` のため）。
 
 - `Components/_Imports.razor` の `@attribute [Authorize]` で全画面がログイン必須。ログインなしで見せる画面には `@attribute [AllowAnonymous]` を付ける。
 - ログイン Cookie は対話モード（SignalR）では発行・削除できないため、`account/signin`（チケットで発行）と `account/end-session` の HTTP エンドポイントで行う。画面からは `NavigateTo(..., forceLoad: true)` で移る（`Href` だと画面内の遷移になり 404）。アプリの URL に `logout` を含めないこと（SageMaker のプロキシ配下でアプリに届かず、SageMaker の認証が切れる現象があった）。

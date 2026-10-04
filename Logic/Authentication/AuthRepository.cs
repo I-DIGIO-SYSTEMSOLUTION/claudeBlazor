@@ -47,10 +47,11 @@ namespace LogicCommon
 
         // ---- 設定 ----
 
-        public async Task<SecurityPolicy> GetSecurityPolicyAsync()
+        // useCache = false は、キャッシュを使わずに DB から読む (パスワードポリシーの変更画面で最新の値を出すため)
+        public async Task<SecurityPolicy> GetSecurityPolicyAsync(bool useCache = true)
         {
             SecurityPolicy? policy = cachedPolicy;
-            if (policy != null && DateTime.UtcNow - cachedPolicyAt < PolicyCacheDuration)
+            if (useCache && policy != null && DateTime.UtcNow - cachedPolicyAt < PolicyCacheDuration)
             {
                 return policy;
             }
@@ -61,6 +62,33 @@ namespace LogicCommon
             cachedPolicy = policy;
             cachedPolicyAt = DateTime.UtcNow;
             return policy;
+        }
+
+        // パスワードポリシーと自動ログアウトの時間を更新する。読み込んだ時点から他の人が変更していれば false
+        // 更新できたらキャッシュを捨て、このサーバーでは次の読み込みから新しい値を使う (他のサーバーでは最大 10 秒遅れる)
+        public async Task<bool> UpdatePasswordPolicyAsync(SecurityPolicy policy, DateTime expectedUpdatedAt, DateTime now)
+        {
+            await using DbContextAuth db = await CreateDbContextAsync();
+            bool updated = await ExecuteAsync(db, "SecurityPolicy/UpdatePasswordPolicy", new
+            {
+                minLength = policy.PasswordMinLength,
+                maxLength = policy.PasswordMaxLength,
+                requireUppercase = policy.RequireUppercase,
+                requireLowercase = policy.RequireLowercase,
+                requireDigit = policy.RequireDigit,
+                requireSymbol = policy.RequireSymbol,
+                minCharTypes = policy.MinCharTypes,
+                disallowLoginId = policy.DisallowLoginId,
+                historyCount = policy.PasswordHistoryCount,
+                expiryDays = policy.PasswordExpiryDays,
+                expiryWarningDays = policy.PasswordExpiryWarningDays,
+                idleTimeoutMinutes = policy.IdleTimeoutMinutes,
+                timeoutWarningSeconds = policy.TimeoutWarningSeconds,
+                expectedUpdatedAt,
+                now,
+            }) == 1;
+            cachedPolicy = null;
+            return updated;
         }
 
         public async Task<MailSetting?> GetMailSettingAsync(DbContextAuth db) =>
@@ -119,6 +147,9 @@ namespace LogicCommon
 
         public Task<int> RecordLoginSuccessAsync(DbContextAuth db, long id, DateTime now) =>
             ExecuteAsync(db, "User/RecordLoginSuccess", new { id, now });
+
+        public Task<int> RecordExpiryNotifiedAsync(DbContextAuth db, long id, DateTime now) =>
+            ExecuteAsync(db, "User/RecordExpiryNotified", new { id, now });
 
         // 読み込んだ時点から他の変更が入っていれば false
         public async Task<bool> UpdatePasswordAsync(DbContextAuth db, long id, string passwordHash, string passwordHistoryJson,

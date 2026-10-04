@@ -32,6 +32,7 @@ CREATE TABLE security_policies (
     disallow_login_id            boolean      NOT NULL DEFAULT true,
     password_history_count       integer      NOT NULL DEFAULT 3,
     password_expiry_days         integer      NOT NULL DEFAULT 0,
+    password_expiry_warning_days integer      NOT NULL DEFAULT 7,
 
     -- パスワードリセット
     password_reset_token_minutes integer      NOT NULL DEFAULT 30,
@@ -60,6 +61,7 @@ CREATE TABLE security_policies (
     CONSTRAINT ck_security_policies_char_types      CHECK (min_char_types BETWEEN 0 AND 4),
     CONSTRAINT ck_security_policies_history         CHECK (password_history_count >= 0),
     CONSTRAINT ck_security_policies_expiry          CHECK (password_expiry_days >= 0),
+    CONSTRAINT ck_security_policies_expiry_warning  CHECK (password_expiry_warning_days >= 0),
     CONSTRAINT ck_security_policies_reset_token     CHECK (password_reset_token_minutes >= 1),
     CONSTRAINT ck_security_policies_idle_timeout    CHECK (idle_timeout_minutes >= 1),
     CONSTRAINT ck_security_policies_timeout_warning CHECK (timeout_warning_seconds >= 0
@@ -89,6 +91,7 @@ COMMENT ON COLUMN security_policies.min_char_types               IS '英大文�
 COMMENT ON COLUMN security_policies.disallow_login_id            IS 'ログインID を含むパスワードを禁止するか';
 COMMENT ON COLUMN security_policies.password_history_count       IS '現在のパスワードを含む直近何世代の再利用を禁止するか (0 は制限なし)';
 COMMENT ON COLUMN security_policies.password_expiry_days         IS 'パスワード有効期限 (日、0 は無期限)';
+COMMENT ON COLUMN security_policies.password_expiry_warning_days IS 'パスワードの有効期限の何日前からログイン時に変更を勧めるか (0 は知らせない)';
 COMMENT ON COLUMN security_policies.password_reset_token_minutes IS 'パスワードリセットリンクの有効期限 (分)';
 COMMENT ON COLUMN security_policies.idle_timeout_minutes         IS '最後の操作 (またはサーバー処理の終了) からログアウトまでの時間 (分)';
 COMMENT ON COLUMN security_policies.timeout_warning_seconds      IS 'ログアウト前に警告を出す秒数 (0 は警告なし)';
@@ -154,6 +157,7 @@ CREATE TABLE users (
     locked_until          timestamptz,
     last_login_at         timestamptz,
     password_changed_at   timestamptz,
+    password_expiry_notified_at timestamptz,
     mfa_enabled           boolean      NOT NULL DEFAULT false,
     mfa_method            varchar(10),
     totp_secret_encrypted varchar(512),
@@ -187,6 +191,7 @@ COMMENT ON COLUMN users.last_failed_login_at  IS '最後にログインに失敗
 COMMENT ON COLUMN users.locked_until          IS 'ロックアウト解除日時 (この日時まではログイン不可)';
 COMMENT ON COLUMN users.last_login_at         IS '最終ログイン日時';
 COMMENT ON COLUMN users.password_changed_at   IS 'パスワード変更日時 (有効期限の判定用)';
+COMMENT ON COLUMN users.password_expiry_notified_at IS '有効期限切れの警告ダイアログを最後に表示した日時 (警告は 1 日 1 回だけ表示する)';
 COMMENT ON COLUMN users.mfa_enabled           IS '追加認証 (ワンタイムパスワード) を行うか';
 COMMENT ON COLUMN users.mfa_method            IS '追加認証の方式 (TOTP / EMAIL / SMS)';
 COMMENT ON COLUMN users.totp_secret_encrypted IS 'TOTP のシークレット (ASP.NET Core Data Protection で暗号化。用途: MyBlazorApp.TotpSecret)';

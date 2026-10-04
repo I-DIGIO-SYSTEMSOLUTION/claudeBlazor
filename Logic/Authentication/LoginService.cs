@@ -13,9 +13,31 @@ namespace LogicCommon
         PasswordExpired,
         // 追加の認証 (ワンタイムパスワード) が必要 (未実装)
         MfaRequired,
+        // 本人確認に成功したが、パスワードの有効期限が近い。画面で変更するかを確認し、
+        // CompleteSignInAsync でチケットを発行してからサインイン用のエンドポイントへ遷移する
+        PasswordExpiringSoon,
     }
 
-    public sealed record LoginResult(LoginStatus Status, string? Ticket = null, string? ResetToken = null);
+    // PasswordExpiresAt は UTC。PasswordExpiringSoon のときだけ PendingSignIn が入る
+    public sealed record LoginResult(LoginStatus Status, string? Ticket = null, string? ResetToken = null,
+        DateTime? PasswordExpiresAt = null, int? DaysUntilExpiry = null, PendingSignIn? PendingSignIn = null);
+
+    // 本人確認が済み、サインイン用チケットの発行を待っている状態 (サーバーのメモリ上だけに持つ。1 回だけ使える)
+    // 確認ダイアログを開いている間にチケットの期限 (1 分) が切れないよう、ユーザーが選んだ時点でチケットを発行する
+    public sealed class PendingSignIn
+    {
+        internal PendingSignIn(long userId, string authMethod, string? mfaMethod)
+        {
+            UserId = userId;
+            AuthMethod = authMethod;
+            MfaMethod = mfaMethod;
+        }
+
+        internal long UserId { get; }
+        internal string AuthMethod { get; }
+        internal string? MfaMethod { get; }
+        internal bool Used { get; set; }
+    }
 
     // サインイン用チケットを使ったときに分かる内容
     public sealed record SignInTicketInfo(User User, string AuthMethod, string? MfaMethod);
@@ -115,8 +137,36 @@ namespace LogicCommon
                 return new LoginResult(LoginStatus.MfaRequired);
             }
 
+            // 6. パスワードの有効期限が近い場合は、変更するかを画面で確認する
+            //    確認は 1 日 1 回 (日本時間の日付が変わるまで) だけ出す。出したら、その日時を記録する
+            if (policy.PasswordExpiryDays > 0 && policy.PasswordExpiryWarningDays > 0)
+            {
+                DateTime expiresAt = (user.PasswordChangedAt ?? user.CreatedAt).AddDays(policy.PasswordExpiryDays);
+                int daysLeft = (int)Math.Ceiling((expiresAt - now).TotalDays);
+                bool notifiedToday = user.PasswordExpiryNotifiedAt is DateTime notifiedAt &&
+                    AppTime.ToDisplayDate(notifiedAt) == AppTime.ToDisplayDate(now);
+                if (daysLeft <= policy.PasswordExpiryWarningDays && !notifiedToday)
+                {
+                    await repository.RecordExpiryNotifiedAsync(db, user.Id, now);
+                    return new LoginResult(LoginStatus.PasswordExpiringSoon, PasswordExpiresAt: expiresAt, DaysUntilExpiry: daysLeft,
+                        PendingSignIn: new PendingSignIn(user.Id, AuthMethods.Password, null));
+                }
+            }
+
             string ticket = await IssueSignInTicketAsync(db, user.Id, AuthMethods.Password, null, client.IpAddress);
             return new LoginResult(LoginStatus.Succeeded, Ticket: ticket);
+        }
+
+        // 確認の後でサインイン用チケットを発行する (PasswordExpiringSoon のとき)。2 回目以降は null
+        public async Task<string?> CompleteSignInAsync(PendingSignIn pending, ClientConnectionInfo client)
+        {
+            if (pending.Used)
+            {
+                return null;
+            }
+            pending.Used = true;
+            await using DbContextAuth db = await repository.CreateDbContextAsync();
+            return await IssueSignInTicketAsync(db, pending.UserId, pending.AuthMethod, pending.MfaMethod, client.IpAddress);
         }
 
         private async Task<bool> IsIpBlockedAsync(DbContextAuth db, SecurityPolicy policy, string? ipAddress, DateTime now)

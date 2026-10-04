@@ -61,6 +61,7 @@ namespace LogicCommon
             services.AddSingleton<SessionService>();
             services.AddSingleton<MailService>();
             services.AddSingleton<UserAccountService>();
+            services.AddSingleton<SecurityPolicyService>();
             services.AddSingleton<PasswordResetService>();
             services.AddSingleton<LoginService>();
             services.AddScoped<ClientConnectionInfo>();
