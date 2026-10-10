@@ -3,6 +3,18 @@
 -- gen_random_uuid() は PostgreSQL 13 以降なら拡張機能なしで使える (12 以前は先に CREATE EXTENSION pgcrypto; を実行する)
 -- 最初の管理者は、アプリの setup 画面から登録する (パスワードのハッシュをアプリで作る必要があるため)
 
+
+CREATE TABLE weather_forecasts (
+    id             SERIAL       PRIMARY KEY,
+    date           DATE         NOT NULL,
+    temperature_c  INTEGER      NOT NULL,
+    summary        VARCHAR(50),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+
+
 -- ============================================================
 -- セキュリティポリシー (id = 1 の 1 行だけの設定テーブル)
 -- ============================================================
