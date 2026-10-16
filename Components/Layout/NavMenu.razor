@@ -4,9 +4,8 @@
 @* ボタンをもう一度押すか、メニューの外側をクリックすると閉じる *@
 <MudMenu Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" AriaLabel="メニュー"
          AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-    <MudMenuItem Href="./" Icon="@Icons.Material.Filled.Home">ホーム</MudMenuItem>
-    <MudMenuItem Href="counter" Icon="@Icons.Material.Filled.AddBox">カウンター</MudMenuItem>
-    <MudMenuItem Href="weather" Icon="@Icons.Material.Filled.Cloud">天気予報</MudMenuItem>
+    <MudMenuItem Href="attendance" Icon="@Icons.Material.Filled.AccessTime">勤怠</MudMenuItem>
+    <MudMenuItem Href="attendance/list" Icon="@Icons.Material.Filled.CalendarMonth">勤怠一覧</MudMenuItem>
     @* 管理者 (ADMIN ロール) のときだけ表示する。画面側でも [Authorize(Roles = ...)] で管理者以外は開けない *@
     <AuthorizeView Roles="@AuthConstants.AdminRole">
         <MudMenuItem Href="users" Icon="@Icons.Material.Filled.ManageAccounts">ユーザー管理</MudMenuItem>

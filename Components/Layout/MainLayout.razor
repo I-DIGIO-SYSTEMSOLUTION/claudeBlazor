@@ -9,9 +9,8 @@
 
 <MudLayout>
     <MudAppBar Elevation="1">
-        <MudText Typo="Typo.h6">MyBlazorApp</MudText>
+        <MudText Typo="Typo.h6">勤怠管理</MudText>
         <MudSpacer />
-        <MudLink Href="https://learn.microsoft.com/aspnet/core/" Target="_blank" Color="Color.Inherit" Class="mr-2">このアプリについて</MudLink>
         <ThemeMenu ThemeKey="@themeKey" ThemeKeyChanged="ChangeThemeAsync"
                    IsDarkMode="isDarkMode" IsDarkModeChanged="ChangeDarkModeAsync" />
         @* メニューはログインしているときだけ表示する (ログイン画面などでは出さない) *@

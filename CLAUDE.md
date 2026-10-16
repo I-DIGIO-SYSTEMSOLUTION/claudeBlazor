@@ -53,3 +53,12 @@ SageMaker のプロキシは `/codeeditor/default/proxy/5000` のプレフィッ
 - 認証関係の DbContext（`DbContextAuth` / `DbContextDataProtection`）は、開発時でも SQL のログにパラメータの値を出さない（`ConfigureDbContext(options, allowSensitiveDataLogging: false)`）。
 - Data Protection の鍵は `data_protection_keys` テーブルに保存している。削除するとログイン Cookie と暗号化済みの値が復号できなくなる。
 - 接続元 IP をプロキシの `X-Forwarded-For` から取るのは、`appsettings.json` の `ForwardedHeaders` に信頼するプロキシを書いたときだけ。
+
+## 勤怠機能
+
+画面は `Components/Pages/AttendanceClock.razor`（`attendance`。ルート `/` もこの画面で、ログイン後の既定の画面になる。Entity の `Attendance` と名前がぶつかるので画面のクラス名は `AttendanceClock`）、処理は `Logic/Attendance/AttendanceService.cs`、SQL は `Sql/Attendance/`、テーブル `attendances` の DDL は `Ddl/CreateAttendanceTables_<DB 種別>.sql`。
+
+- ログインユーザー・日本時間の日付ごとに 1 行（`UNIQUE (user_id, work_date)`）。出勤は行が無いときだけ INSERT、退勤は `clock_out_at IS NULL` のときだけ UPDATE し、影響行数 0 なら打刻済みとして扱う（画面のボタン制御だけに頼らない）。日付はボタンを押した時点のサーバー時刻で判定する。
+- 日付をまたぐ勤務・打刻の訂正は扱わない仕様。コメントは出勤・退勤時に保存し、退勤時の内容で上書きする（最大 1024 文字、空欄は NULL）。
+- 現在時刻の表示は `AttendanceClock.razor.js` がブラウザで行う（サーバー側のタイマーで毎秒再描画しない）。日本時間の日付が変わると `OnDateChanged` で打刻状況を読み直す。
+- 勤怠一覧は `Components/Pages/AttendanceList.razor`（`attendance/list`）。ログインユーザーの当月分（日本時間）を月の全日 1 日 1 行で表示する（表示のみ）。土日の行は app.css の `attendance-row-saturday` / `attendance-row-sunday` で色分けし、祝日は扱わない。勤務時間は退勤 − 出勤（秒は切り捨て）から休憩 `AttendanceService.BreakMinutes`（今は 60 分固定）を引いた値で、退勤していない日は空欄、合計にも含めない。

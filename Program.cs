@@ -28,6 +28,10 @@ builder.Services.AddDbContextFactory<DbContextImageAnnotationComment>(
     options => DatabaseAccessLogicSingleton.GetInstance.ConfigureDbContext(options));
 builder.Services.AddDbContextFactory<DbContextWeatherForecast>(
     options => DatabaseAccessLogicSingleton.GetInstance.ConfigureDbContext(options));
+builder.Services.AddDbContextFactory<DbContextAttendance>(
+    options => DatabaseAccessLogicSingleton.GetInstance.ConfigureDbContext(options));
+// 勤怠の打刻 (出勤・退勤)
+builder.Services.AddSingleton<AttendanceService>();
 // ログイン関係はパスワードハッシュやトークンを扱うので、開発時でも SQL のログにパラメータの値を出さない
 builder.Services.AddDbContextFactory<DbContextAuth>(
     options => DatabaseAccessLogicSingleton.GetInstance.ConfigureDbContext(options, allowSensitiveDataLogging: false));

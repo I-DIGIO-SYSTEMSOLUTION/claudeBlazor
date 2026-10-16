@@ -1,0 +1,123 @@
+@page "/attendance/list"
+@using System.Security.Claims
+@inject AttendanceService AttendanceService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILogger<AttendanceList> Logger
+
+@* 勤怠一覧 (ログインユーザーの当月分)。勤怠画面 (AttendanceClock) で打刻した内容を、月の全日を 1 日 1 行で表示する。表示のみで編集はできない *@
+<PageTitle>勤怠一覧</PageTitle>
+
+@* ページをウィンドウの高さに収め、表を残りの高さいっぱいに広げる (表の中だけスクロールする。app.css の fill-height-*) *@
+<div class="fill-height-page">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudText Typo="Typo.h3">勤怠一覧</MudText>
+        @if (Month != null)
+        {
+            <MudText Typo="Typo.h5" Class="ml-4">@Month.Year 年 @Month.Month 月</MudText>
+        }
+        <MudSpacer />
+        @* プロキシ配下で動かすため、Href は先頭に / を付けない相対パスにする *@
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AccessTime" Href="attendance">打刻画面へ</MudButton>
+    </MudStack>
+
+    @if (errorMessage != null)
+    {
+        <MudAlert Severity="Severity.Error">@errorMessage</MudAlert>
+    }
+    else if (Month == null)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText><em>読み込み中...</em></MudText>
+    }
+    else
+    {
+        <div class="fill-height-table">
+            @* 行間を広げるため Dense にしない。土日の行の色は RowClassFunc で付ける (app.css)。
+               土日の色と紛らわしいので Striped にはしない *@
+            <MudTable T="AttendanceDay" Items="Month.Days" Hover="true" Bordered="true" FixedHeader="true" Elevation="1"
+                      HeaderClass="table-header-colored" RowClassFunc="GetRowClass">
+                <HeaderContent>
+                    <MudTh Style="width: 140px;">日付</MudTh>
+                    <MudTh Style="width: 100px;">出勤</MudTh>
+                    <MudTh Style="width: 100px;">退勤</MudTh>
+                    <MudTh Style="width: 110px;">勤務時間</MudTh>
+                    <MudTh>コメント</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="日付">@($"{context.Date:MM/dd}({WeekdayNames[(int)context.Date.DayOfWeek]})")</MudTd>
+                    <MudTd DataLabel="出勤">@AppTime.Format(context.ClockInAt, "HH:mm")</MudTd>
+                    <MudTd DataLabel="退勤">
+                        @if (context.ClockInAt != null && context.ClockOutAt == null)
+                        {
+                            @* 今日は勤務中。過去の日は退勤の打刻漏れ (打刻の訂正は扱わない仕様なので、目立たせるだけ) *@
+                            @if (context.Date == Month.Today)
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Info">勤務中</MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Error">未打刻</MudText>
+                            }
+                        }
+                        else
+                        {
+                            @AppTime.Format(context.ClockOutAt, "HH:mm")
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="勤務時間">@FormatMinutes(context.WorkMinutes)</MudTd>
+                    <MudTd DataLabel="コメント"><span class="attendance-comment">@context.Comment</span></MudTd>
+                </RowTemplate>
+            </MudTable>
+        </div>
+
+        <MudPaper Class="pa-4 mt-4" Elevation="1">
+            <MudStack Row="true" Spacing="8" Wrap="Wrap.Wrap">
+                <MudText><b>出勤日数:</b> @Month.WorkDays 日</MudText>
+                <MudText><b>合計勤務時間:</b> @FormatMinutes(Month.TotalWorkMinutes)</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    勤務時間は休憩 @(AttendanceService.BreakMinutes / 60) 時間を差し引いた時間です。退勤していない日は合計に含みません。
+                </MudText>
+            </MudStack>
+        </MudPaper>
+    }
+</div>
+
+@code {
+    private static readonly string[] WeekdayNames = ["日", "月", "火", "水", "木", "金", "土"];
+
+    // 当月の勤怠。プリレンダリングで読んだ値を対話モードに引き継ぐ (切り替わるときに読み込み中の表示に戻らないように)
+    [PersistentState] public AttendanceMonth? Month { get; set; }
+
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Month != null)
+        {
+            return;
+        }
+        try
+        {
+            ClaimsPrincipal user = (await AuthStateProvider.GetAuthenticationStateAsync()).User;
+            long userId = long.Parse(user.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            Month = await AttendanceService.GetCurrentMonthAsync(userId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "勤怠一覧を読み込めませんでした。");
+            errorMessage = "勤怠一覧の読み込み中にエラーが発生しました。";
+        }
+    }
+
+    // 土曜日・日曜日の行に色を付ける (祝日は扱わない)
+    private static string GetRowClass(AttendanceDay day, int rowNumber) => day.Date.DayOfWeek switch
+    {
+        DayOfWeek.Saturday => "attendance-row-saturday",
+        DayOfWeek.Sunday => "attendance-row-sunday",
+        _ => "",
+    };
+
+    // 分を H:mm で表示する (合計は 24 時間を超えるので、時間は 24 で折り返さない)
+    private static string FormatMinutes(int? minutes) =>
+        minutes is int m ? $"{m / 60}:{m % 60:00}" : "";
+}

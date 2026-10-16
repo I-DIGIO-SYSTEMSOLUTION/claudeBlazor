@@ -127,6 +127,21 @@ h1:focus {
 /* ページをウィンドウの高さに収め、表を残りの高さいっぱいに広げる (Weather.razor)。
    ウィンドウの高さを変えると表の高さが追従し、表の中だけがスクロールする (ヘッダーは FixedHeader で固定)。
    高さ = ウィンドウの高さ - AppBar - MudContainer の上下の余白 (py-4 = 16px x 2) */
+/* 勤怠一覧の土日の行 (MudBlazor の Hover の背景色より優先させるため、セルに指定する) */
+.attendance-row-saturday > td {
+    background-color: color-mix(in srgb, var(--mud-palette-info) 12%, var(--mud-palette-surface));
+}
+
+.attendance-row-sunday > td {
+    background-color: color-mix(in srgb, var(--mud-palette-error) 12%, var(--mud-palette-surface));
+}
+
+/* 勤怠一覧のコメント (改行をそのまま表示し、長い英数字も枠内で折り返す) */
+.attendance-comment {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .fill-height-page {
     display: flex;
     flex-direction: column;

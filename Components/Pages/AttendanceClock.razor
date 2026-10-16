@@ -1,0 +1,205 @@
+﻿@page "/"
+@page "/attendance"
+@implements IAsyncDisposable
+@using System.Security.Claims
+@inject AttendanceService AttendanceService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject ILogger<AttendanceClock> Logger
+
+@* 勤怠の打刻 (出勤・退勤)。データはログインユーザー単位で attendances に保存する。日付は日本時間で判定する *@
+<PageTitle>勤怠</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-4">
+    <MudPaper Class="pa-6" Elevation="2">
+        <MudText Typo="Typo.h5" GutterBottom="true">勤怠</MudText>
+
+        @* 日付と時刻は JavaScript (AttendanceClock.razor.js) が 1 秒ごとに書き換える。
+           ここで描画する値は最初の 1 回だけ作り、再描画で JavaScript の表示を上書きしないようにする *@
+        <div class="d-flex flex-column align-center my-4">
+            <MudText Typo="Typo.h6"><span @ref="dateElement">@initialDate</span></MudText>
+            <MudText Typo="Typo.h3"><span @ref="timeElement">@initialTime</span></MudText>
+        </div>
+
+        <ErrorList Errors="errors" />
+
+        @if (Status == null)
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                <MudSimpleTable Dense="true" Outlined="true">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%">出勤</th>
+                            <td>@(Status.ClockInAt == null ? "未打刻" : AppTime.Format(Status.ClockInAt, "HH:mm:ss"))</td>
+                        </tr>
+                        <tr>
+                            <th>退勤</th>
+                            <td>@(Status.ClockOutAt == null ? "未打刻" : AppTime.Format(Status.ClockOutAt, "HH:mm:ss"))</td>
+                        </tr>
+                    </tbody>
+                </MudSimpleTable>
+
+                <MudStack Row="true" Justify="Justify.Center" Spacing="4" Class="mt-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Login"
+                               Disabled="@(busy || !RendererInfo.IsInteractive)" OnClick="ClockInAsync">
+                        出勤
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Logout"
+                               Disabled="@(busy || !RendererInfo.IsInteractive)" OnClick="ClockOutAsync">
+                        退勤
+                    </MudButton>
+                </MudStack>
+
+                @* プロキシ配下で動かすため、Href は先頭に / を付けない相対パスにする *@
+                <MudLink Href="attendance/list" Class="align-self-end">勤怠一覧を見る</MudLink>
+            </MudStack>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private static readonly string[] WeekdayNames = ["日", "月", "火", "水", "木", "金", "土"];
+
+    // その日の打刻状況。プリレンダリングで読んだ値を対話モードに引き継ぐ (切り替わるときに読み込み中の表示に戻らないように)
+    [PersistentState] public AttendanceStatus? Status { get; set; }
+
+    private string? comment;
+    private IReadOnlyList<string> errors = [];
+    private bool busy;
+
+    private string initialDate = "";
+    private string initialTime = "";
+    private ElementReference dateElement;
+    private ElementReference timeElement;
+    private IJSObjectReference? module;
+    private IJSObjectReference? clockHandle;
+    private DotNetObjectReference<AttendanceClock>? selfRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        DateTime now = DateTime.UtcNow;
+        DateOnly today = AppTime.ToDisplayDate(now);
+        initialDate = $"{today:yyyy/MM/dd}({WeekdayNames[(int)today.DayOfWeek]})";
+        initialTime = AppTime.Format(now, "HH:mm:ss");
+
+        Status ??= await AttendanceService.GetTodayAsync(await GetUserIdAsync());
+        comment = Status.Comment;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+        try
+        {
+            selfRef = DotNetObjectReference.Create(this);
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/AttendanceClock.razor.js");
+            clockHandle = await module.InvokeAsync<IJSObjectReference>("start", selfRef, dateElement, timeElement,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), (Status?.WorkDate ?? AttendanceService.Today()).ToString("yyyy-MM-dd"));
+        }
+        catch (JSDisconnectedException)
+        {
+            // 画面を閉じた後
+        }
+    }
+
+    // 画面を開いたまま日付が変わったら、新しい日の打刻状況を読み直す (前日の「退勤済み」の表示が残らないように)
+    [JSInvokable]
+    public async Task OnDateChanged()
+    {
+        if (busy)
+        {
+            return;
+        }
+        try
+        {
+            Status = await AttendanceService.GetTodayAsync(await GetUserIdAsync());
+            comment = Status.Comment;
+            errors = [];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "勤怠の打刻状況を読み込めませんでした。");
+            errors = ["打刻状況の読み込み中にエラーが発生しました。画面を開き直してください。"];
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task ClockInAsync() =>
+        PunchAsync(userId => AttendanceService.ClockInAsync(userId, comment), "出勤しました。");
+
+    private Task ClockOutAsync() =>
+        PunchAsync(userId => AttendanceService.ClockOutAsync(userId, comment), "退勤しました。");
+
+    private async Task PunchAsync(Func<long, Task<AccountResult>> punch, string successMessage)
+    {
+        if (busy)
+        {
+            return;
+        }
+        busy = true;
+        errors = [];
+        try
+        {
+            long userId = await GetUserIdAsync();
+            AccountResult result = await punch(userId);
+            if (result.Succeeded)
+            {
+                Snackbar.Add(successMessage, Severity.Success);
+            }
+            else
+            {
+                errors = result.Errors;
+            }
+            // 成功・失敗どちらでも DB の状態を読み直す (別のタブで打刻した場合や、日付が変わっていた場合に表示を合わせる)
+            Status = await AttendanceService.GetTodayAsync(userId);
+            if (result.Succeeded)
+            {
+                comment = Status.Comment;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "勤怠を打刻できませんでした。");
+            errors = ["打刻中にエラーが発生しました。"];
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task<long> GetUserIdAsync()
+    {
+        ClaimsPrincipal user = (await AuthStateProvider.GetAuthenticationStateAsync()).User;
+        return long.Parse(user.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (clockHandle != null)
+            {
+                await clockHandle.InvokeVoidAsync("dispose");
+                await clockHandle.DisposeAsync();
+            }
+            if (module != null)
+            {
+                await module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // 接続が切れた後は JavaScript 側も無くなっている
+        }
+        selfRef?.Dispose();
+    }
+}
