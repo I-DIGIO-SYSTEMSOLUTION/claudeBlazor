@@ -24,9 +24,8 @@ namespace LogicCommon
         public DateOnly Date { get; set; }
         public DateTime? ClockInAt { get; set; }
         public DateTime? ClockOutAt { get; set; }
-        public string? Comment { get; set; }
 
-        // 勤務時間 (分)。休憩時間を差し引いた値で、退勤していない日は null
+        // 勤務時間 (分)。退勤していない日は null
         public int? WorkMinutes { get; set; }
     }
 }

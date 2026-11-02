@@ -136,12 +136,6 @@ h1:focus {
     background-color: color-mix(in srgb, var(--mud-palette-error) 12%, var(--mud-palette-surface));
 }
 
-/* 勤怠一覧のコメント (改行をそのまま表示し、長い英数字も枠内で折り返す) */
-.attendance-comment {
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-}
-
 .fill-height-page {
     display: flex;
     flex-direction: column;

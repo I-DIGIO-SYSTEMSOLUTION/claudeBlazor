@@ -18,5 +18,17 @@
     <None Update="Sql\**\*.sql" CopyToPublishDirectory="PreserveNewest" />
     <None Update="log4net.config" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- テスト用プロジェクト (MyBlazorApp.Tests) のファイルをこのプロジェクトに取り込まない -->
+  <ItemGroup>
+    <Compile Remove="MyBlazorApp.Tests\**" />
+    <Content Remove="MyBlazorApp.Tests\**" />
+    <None Remove="MyBlazorApp.Tests\**" />
+  </ItemGroup>
+  <!-- 開発用コマンド (tools/ResetToday など) のファイルをこのプロジェクトに取り込まない -->
+  <ItemGroup>
+    <Compile Remove="tools\**" />
+    <Content Remove="tools\**" />
+    <None Remove="tools\**" />
+  </ItemGroup>
 
 </Project>

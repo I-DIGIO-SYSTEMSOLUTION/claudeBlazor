@@ -11,11 +11,51 @@
 ```bash
 dotnet build -c Debug MyBlazorApp.csproj
 dotnet run --launch-profile http        # http://localhost:5000 で待ち受け、ProxyBasePath を設定
+dotnet test MyBlazorApp.Tests          # テストを実行（リポジトリ直下で）
+scripts/reset-today.sh                 # 今日の打刻を消す（動作確認のやり直し用。リポジトリ直下で）
 ```
 
 - dotnet は apt でインストールしてあり、本体は `/usr/bin/dotnet`、`DOTNET_ROOT=/usr/lib/dotnet` です。`.vscode/tasks.json` と `launch.json` はこれらのパスを直接書いています。
 - VS Code のデバッグ（`.vscode/launch.json`）は `bin/Debug/net10.0/MyBlazorApp.dll` を直接起動します。そのため `Properties/launchSettings.json` は**適用されません**（待ち受けアドレスは launch.json 側で `ASPNETCORE_URLS=http://localhost:5000` を設定）。この起動方法では `ProxyBasePath` が未設定なので、`App.razor` 内のクライアント側 base href スクリプトによって動作しています。
-- このリポジトリにはテストも linter もありません。
+- テストは xUnit のプロジェクト `MyBlazorApp.Tests/`（`MyBlazorApp.csproj` を参照）にあり、リポジトリ直下で `dotnet test MyBlazorApp.Tests` で実行する（引数なしの `dotnet test` は直下の `MyBlazorApp.csproj` が対象になり、テストは実行されない）。テストはデータベースを使わない。`MyBlazorApp.csproj` は `MyBlazorApp.Tests/**` を取り込まない設定にしてある。linter はない。
+
+## 作業ルール
+
+- 依頼された範囲以外のコードは変更しない。
+- 不具合の原因は、今のコードを読んで調べる。git の履歴（`git log`・`git show`・過去のコミットとの差分）やほかのブランチ（`origin/main` など）は調べない（ユーザーが頼んだときを除く）。作業中の変更を `git status` / `git diff` で見るのはよい。
+- 依頼と関係のない不具合に気づいても、ユーザーが不具合を探しているとき（「ほかに不具合がないか見て」などと頼まれたとき）だけ伝える。
+- 未回答の `[Answer]` が残っている間は、その仕様に関わる実装をしない。
+- 方針を人が承認するまで実装しない（ユーザーが「承認はいらない」「すぐ直して」などと頼んだときを除く）。
+- 判定や入力チェックは C# のクラスに書く（画面や SQL だけに書かない）。
+- テストコード（xUnit）は、ユーザーが依頼したときだけ書く。テストが失敗したら、テストではなく実装を直す（テストを変えるのは仕様が変わったときだけで、変える前に人に確認する）。
+- コミットや push はしない（ユーザーが明示的に依頼した場合を除く）。
+- 動作の確認は、確認項目表（`check-NN.md`）をもとにユーザーが画面で行う。データベースを読み書きする確認用のプログラムやスクリプトは作らない（ユーザーが頼んだときを除く）。
+- 打刻のリセット（やり直し）を頼まれたら `scripts/reset-today.sh` を実行し、「今日の打刻をリセットしました」とだけ伝える（仕組みの説明は、聞かれたときだけでよい）。
+- データベースを直接操作するときは、接続情報（パスワードなど）を画面やファイルに出さない。接続設定ファイル（`Setting/databaseCommonConnectionSetting.xml`）は変更しない。
+- テーブル定義（`Ddl/` と、データベースのテーブル）は変更しない。
+- パッケージの脆弱性の警告（NU1902 / NU1903）と `SYSLIB0001`（UTF-7）の警告には対応しない。
+
+## 作業ファイル（ドキュメント）
+
+GitHub の Issue・プルリクエストは使わない。Issue や仕様の記録は、次の md ファイルで管理する。
+
+- ひな形は `docs/templates/` にある（`issue.md`、`check.md`）。ひな形そのものは書き換えず、コピーして使う。
+- 機能追加は `docs/feature/` に置く。
+  - `qa-NN.md`：要件の [Question] / [Answer]、確定した仕様、変更方針、変更記録。
+  - `check-NN.md`：画面で確かめる確認項目表（`docs/templates/check.md` をコピーして作る）。
+- 不具合は `docs/issues/` に置く。
+  - `issue-NN.md`：Issue（`docs/templates/issue.md` をコピーして作る）。
+  - `check-NN.md`：その Issue の確認項目表。
+- `NN` はフォルダごとに 01 から振る 2 桁の連番。
+  - 新しく作るときは、そのフォルダにある一番大きい番号の次にする（`docs/feature/` なら `qa-NN.md`、`docs/issues/` なら `issue-NN.md` の番号で数える）。
+  - 同じ作業のファイルは同じ番号にする（`qa-01.md` と `check-01.md`、`issue-01.md` と `check-01.md`）。
+  - 今あるファイルは上書きしない。ユーザーが番号を書かずに「新しく作って」と頼んだときも、この決め方で番号を振る。
+- ユーザーが「Issue を作って」と言ったときは、GitHub ではなく `docs/issues/` に md ファイルを作る。
+- `qa-NN.md` の書き方：
+  - 質問は `[Question] Q1: …` の形で、選択肢とおすすめを付け、その下に空の `[Answer]` を置く。`[Answer]` の中身はユーザーが書くので、AI は書かない。
+  - 確定した仕様は `## 仕様`、変更方針は `## 変更方針`、変更記録は `## 変更記録` の見出しの下に追記する。
+- `check-NN.md` の確認項目は、仕様の要点に絞る（ユーザーが件数を指定しなければ 8 件まで）。「結果」の列はユーザーが画面で試して書くので、AI は空のままにする。
+- `docs/notes/reflection.md` はユーザーが自分で書く振り返りメモなので、AI は書かない・変更しない。
 
 ## プロキシ対応（Program.cs と App.razor にまたがる）
 
@@ -42,7 +82,7 @@ SageMaker のプロキシは `/codeeditor/default/proxy/5000` のプレフィッ
 
 ## ログイン機能
 
-設計と決定事項は `docs/login-design.md`。処理は `Logic/Authentication/`、テーブルは `users` / `user_sessions` / `user_tokens` / `login_histories` / `security_policies` など（外部キーは設定しない方針）。テーブルの DDL は `Ddl/CreateAuthTables_<DB 種別>.sql`（`Ddl/` はアプリが読み込む `Sql/` とは別のフォルダ）。リリース前の開発中なので、列を追加・変更したときは変更用の SQL は作らず、`CreateAuthTables`（PostgreSQL 版と SQL Server 版）と `docs/login-design.md` の DDL を直接直す（開発用の DB には ALTER 文を手で流す）。SQL Server では日時を `datetime2` に UTC で持つ（Entity が `DateTime` のため）。
+設計と決定事項は `docs/login-design.md`。処理は `Logic/Authentication/`、テーブルは `users` / `user_sessions` / `user_tokens` / `login_histories` / `security_policies` など（外部キーは設定しない方針）。テーブルの DDL は `Ddl/CreateAuthTables_<DB 種別>.sql`（`Ddl/` はアプリが読み込む `Sql/` とは別のフォルダ）。リリース前の開発中なので、列を追加・変更したときは変更用の SQL は作らず（ただし今は作業ルールのとおりテーブル定義を変更しない）、`CreateAuthTables`（PostgreSQL 版と SQL Server 版）と `docs/login-design.md` の DDL を直接直す（開発用の DB には ALTER 文を手で流す）。SQL Server では日時を `datetime2` に UTC で持つ（Entity が `DateTime` のため）。
 
 - `Components/_Imports.razor` の `@attribute [Authorize]` で全画面がログイン必須。ログインなしで見せる画面には `@attribute [AllowAnonymous]` を付ける。
 - ログイン Cookie は対話モード（SignalR）では発行・削除できないため、`account/signin`（チケットで発行）と `account/end-session` の HTTP エンドポイントで行う。画面からは `NavigateTo(..., forceLoad: true)` で移る（`Href` だと画面内の遷移になり 404）。アプリの URL に `logout` を含めないこと（SageMaker のプロキシ配下でアプリに届かず、SageMaker の認証が切れる現象があった）。
@@ -56,9 +96,10 @@ SageMaker のプロキシは `/codeeditor/default/proxy/5000` のプレフィッ
 
 ## 勤怠機能
 
-画面は `Components/Pages/AttendanceClock.razor`（`attendance`。ルート `/` もこの画面で、ログイン後の既定の画面になる。Entity の `Attendance` と名前がぶつかるので画面のクラス名は `AttendanceClock`）、処理は `Logic/Attendance/AttendanceService.cs`、SQL は `Sql/Attendance/`、テーブル `attendances` の DDL は `Ddl/CreateAttendanceTables_<DB 種別>.sql`。
+画面は `Components/Pages/AttendanceClock.razor`（`attendance`。ルート `/` もこの画面で、ログイン後の既定の画面になる。Entity の `Attendance` と名前がぶつかるので画面のクラス名は `AttendanceClock`）、処理は `Logic/Attendance/AttendanceService.cs`、SQL は `Sql/Attendance/`、テーブル `attendances` の DDL は `Ddl/CreateAuthTables_<DB 種別>.sql`（ログイン機能のテーブルと同じファイル）。
 
-- ログインユーザー・日本時間の日付ごとに 1 行（`UNIQUE (user_id, work_date)`）。出勤は行が無いときだけ INSERT、退勤は `clock_out_at IS NULL` のときだけ UPDATE し、影響行数 0 なら打刻済みとして扱う（画面のボタン制御だけに頼らない）。日付はボタンを押した時点のサーバー時刻で判定する。
-- 日付をまたぐ勤務・打刻の訂正は扱わない仕様。コメントは出勤・退勤時に保存し、退勤時の内容で上書きする（最大 1024 文字、空欄は NULL）。
+- ログインユーザー・日本時間の日付ごとに 1 行（`UNIQUE (user_id, work_date)`）。出勤・退勤できるかはサーバー側で `AttendanceStatus`（`CanClockIn` / `CanClockOut`）を使って判定し、打刻の SQL は `Sql/Attendance/ClockIn_<DB 種別>.sql` / `ClockOut.sql`。日付はボタンを押した時点のサーバー時刻で判定する。
+- `attendances` テーブルにはメモ用の `comment` 列があるが、今のプログラムでは使っていない。
+- 日付をまたぐ勤務・打刻の訂正は扱わない仕様。
 - 現在時刻の表示は `AttendanceClock.razor.js` がブラウザで行う（サーバー側のタイマーで毎秒再描画しない）。日本時間の日付が変わると `OnDateChanged` で打刻状況を読み直す。
-- 勤怠一覧は `Components/Pages/AttendanceList.razor`（`attendance/list`）。ログインユーザーの当月分（日本時間）を月の全日 1 日 1 行で表示する（表示のみ）。土日の行は app.css の `attendance-row-saturday` / `attendance-row-sunday` で色分けし、祝日は扱わない。勤務時間は退勤 − 出勤（秒は切り捨て）から休憩 `AttendanceService.BreakMinutes`（今は 60 分固定）を引いた値で、退勤していない日は空欄、合計にも含めない。
+- 勤怠一覧は `Components/Pages/AttendanceList.razor`（`attendance/list`）。ログインユーザーの当月分（日本時間）を月の全日 1 日 1 行で表示する（表示のみ）。土日の行は app.css の `attendance-row-saturday` / `attendance-row-sunday` で色分けし、祝日は扱わない。勤務時間は `AttendanceService` で計算し（休憩は `AttendanceService.BreakMinutes`、今は 60 分固定）、退勤していない日は空欄、合計にも含めない。

@@ -41,7 +41,6 @@
                     <MudTh Style="width: 100px;">出勤</MudTh>
                     <MudTh Style="width: 100px;">退勤</MudTh>
                     <MudTh Style="width: 110px;">勤務時間</MudTh>
-                    <MudTh>コメント</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="日付">@($"{context.Date:MM/dd}({WeekdayNames[(int)context.Date.DayOfWeek]})")</MudTd>
@@ -65,7 +64,6 @@
                         }
                     </MudTd>
                     <MudTd DataLabel="勤務時間">@FormatMinutes(context.WorkMinutes)</MudTd>
-                    <MudTd DataLabel="コメント"><span class="attendance-comment">@context.Comment</span></MudTd>
                 </RowTemplate>
             </MudTable>
         </div>
