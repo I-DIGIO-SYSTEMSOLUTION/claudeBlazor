@@ -9,10 +9,9 @@ namespace LogicCommon
         public DateOnly WorkDate { get; set; }
         public DateTime? ClockInAt { get; set; }
         public DateTime? ClockOutAt { get; set; }
-        public string? Comment { get; set; }
 
         // 出勤はその日の行が無いときだけ、退勤はその日の行があり退勤時刻が空のときだけ押せる
-        public bool CanClockIn => ClockInAt == null;
+        public bool CanClockIn => true;
         public bool CanClockOut => ClockInAt != null && ClockOutAt == null;
     }
 
@@ -21,9 +20,6 @@ namespace LogicCommon
     public sealed class AttendanceService
     {
         private static readonly log4net.ILog logger = log4net.LogManager.GetLogger(typeof(AttendanceService));
-
-        // コメントの最大文字数 (attendances.comment の列の長さと合わせる)
-        public const int MaxCommentLength = 1024;
 
         private readonly IDbContextFactory<DbContextAttendance> dbFactory;
         private readonly SqlStatementStore sqlStore;
@@ -39,8 +35,13 @@ namespace LogicCommon
 
         public async Task<AttendanceStatus> GetTodayAsync(long userId)
         {
-            DateOnly workDate = Today();
             await using DbContextAttendance db = await dbFactory.CreateDbContextAsync();
+            return await GetStatusAsync(db, userId, Today());
+        }
+
+        // 指定した日 (日本時間の日付) の打刻の状態
+        private async Task<AttendanceStatus> GetStatusAsync(DbContextAttendance db, long userId, DateOnly workDate)
+        {
             SqlQuery query = sqlStore.Build("Attendance/SelectByDate", new { userId, workDate });
             Attendance? row = await db.Attendances.FromSqlRaw(query.Sql, query.Parameters).AsNoTracking().FirstOrDefaultAsync();
             return new AttendanceStatus
@@ -48,7 +49,6 @@ namespace LogicCommon
                 WorkDate = workDate,
                 ClockInAt = row?.ClockInAt,
                 ClockOutAt = row?.ClockOutAt,
-                Comment = row?.Comment,
             };
         }
 
@@ -77,7 +77,6 @@ namespace LogicCommon
                     Date = date,
                     ClockInAt = row?.ClockInAt,
                     ClockOutAt = row?.ClockOutAt,
-                    Comment = row?.Comment,
                     WorkMinutes = row?.ClockOutAt is DateTime clockOutAt ? CalculateWorkMinutes(row.ClockInAt, clockOutAt) : null,
                 });
             }
@@ -89,21 +88,22 @@ namespace LogicCommon
         {
             long inMinutes = clockInAt.Ticks / TimeSpan.TicksPerMinute;
             long outMinutes = clockOutAt.Ticks / TimeSpan.TicksPerMinute;
-            return (int)Math.Max(0, outMinutes - inMinutes - BreakMinutes);
+            return (int)Math.Max(0, outMinutes - inMinutes);
         }
 
-        // 出勤。日付はボタンを押した時点の日本時間で判定する。その日の行が既にあれば打刻しない
-        public async Task<AccountResult> ClockInAsync(long userId, string? comment)
+        // 出勤。日付はボタンを押した時点の日本時間で判定する。その日の状態を読み、出勤できるか (AttendanceStatus.CanClockIn) を判定してから打刻する
+        // SQL 側にも「行が無いときだけ」の条件があり、同時に押された場合はそちらで防ぐ
+        public async Task<AccountResult> ClockInAsync(long userId)
         {
-            if (ValidateComment(comment) is string error)
-            {
-                return AccountResult.Fail(error);
-            }
-
             DateTime now = DateTime.UtcNow;
             DateOnly workDate = AppTime.ToDisplayDate(now);
             await using DbContextAttendance db = await dbFactory.CreateDbContextAsync();
-            int count = await ExecuteAsync(db, "Attendance/ClockIn", new { userId, workDate, now, comment = NormalizeComment(comment) });
+            AttendanceStatus status = await GetStatusAsync(db, userId, workDate);
+            if (!status.CanClockIn)
+            {
+                return AccountResult.Fail("本日は出勤済みです。");
+            }
+            int count = await ExecuteAsync(db, "Attendance/ClockIn", new { userId, workDate, now });
             if (count == 0)
             {
                 return AccountResult.Fail("本日は出勤済みです。");
@@ -112,37 +112,28 @@ namespace LogicCommon
             return AccountResult.Ok();
         }
 
-        // 退勤。日付はボタンを押した時点の日本時間で判定する。コメントは退勤時の内容で上書きする (空欄なら空になる)
-        public async Task<AccountResult> ClockOutAsync(long userId, string? comment)
+        // 退勤。日付はボタンを押した時点の日本時間で判定する。その日の状態を読み、退勤できるか (AttendanceStatus.CanClockOut) を判定してから打刻する
+        // SQL 側にも「退勤時刻が空のときだけ」の条件があり、同時に押された場合はそちらで防ぐ
+        public async Task<AccountResult> ClockOutAsync(long userId)
         {
-            if (ValidateComment(comment) is string error)
-            {
-                return AccountResult.Fail(error);
-            }
-
             DateTime now = DateTime.UtcNow;
             DateOnly workDate = AppTime.ToDisplayDate(now);
             await using DbContextAttendance db = await dbFactory.CreateDbContextAsync();
-            int count = await ExecuteAsync(db, "Attendance/ClockOut", new { userId, workDate, now, comment = NormalizeComment(comment) });
-            if (count == 0)
+            AttendanceStatus status = await GetStatusAsync(db, userId, workDate);
+            if (!status.CanClockOut)
             {
                 // 出勤前か退勤済み (前日から画面を開いたままで、日付が変わってから押した場合も含む)
+                return AccountResult.Fail("本日の出勤記録が無いか、退勤済みです。");
+            }
+            int count = await ExecuteAsync(db, "Attendance/ClockOut", new { userId, workDate, now });
+            if (count == 0)
+            {
+                // 判定の後に、別の画面から退勤された場合
                 return AccountResult.Fail("本日の出勤記録が無いか、退勤済みです。");
             }
             logger.Info($"退勤しました (ユーザーID {userId}、勤務日 {workDate:yyyy/MM/dd})。");
             return AccountResult.Ok();
         }
-
-        // 文字数は .NET の文字数 (UTF-16) で数える。画面の maxlength と SQL Server の nvarchar と同じ数え方で、
-        // PostgreSQL の varchar (コードポイント単位) でもこれ以下になる
-        private static string? ValidateComment(string? comment) =>
-            comment != null && comment.Length > MaxCommentLength
-                ? $"コメントは {MaxCommentLength} 文字以内で入力してください。"
-                : null;
-
-        // 空欄 (空白だけを含む) は NULL にする
-        private static string? NormalizeComment(string? comment) =>
-            string.IsNullOrWhiteSpace(comment) ? null : comment;
 
         private async Task<int> ExecuteAsync(DbContextAttendance db, string name, object parameters)
         {

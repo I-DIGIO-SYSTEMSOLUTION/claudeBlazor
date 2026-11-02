@@ -68,7 +68,6 @@
     // その日の打刻状況。プリレンダリングで読んだ値を対話モードに引き継ぐ (切り替わるときに読み込み中の表示に戻らないように)
     [PersistentState] public AttendanceStatus? Status { get; set; }
 
-    private string? comment;
     private IReadOnlyList<string> errors = [];
     private bool busy;
 
@@ -88,7 +87,6 @@
         initialTime = AppTime.Format(now, "HH:mm:ss");
 
         Status ??= await AttendanceService.GetTodayAsync(await GetUserIdAsync());
-        comment = Status.Comment;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -121,7 +119,6 @@
         try
         {
             Status = await AttendanceService.GetTodayAsync(await GetUserIdAsync());
-            comment = Status.Comment;
             errors = [];
         }
         catch (Exception ex)
@@ -133,10 +130,10 @@
     }
 
     private Task ClockInAsync() =>
-        PunchAsync(userId => AttendanceService.ClockInAsync(userId, comment), "出勤しました。");
+        PunchAsync(userId => AttendanceService.ClockInAsync(userId), "出勤しました。");
 
     private Task ClockOutAsync() =>
-        PunchAsync(userId => AttendanceService.ClockOutAsync(userId, comment), "退勤しました。");
+        PunchAsync(userId => AttendanceService.ClockOutAsync(userId), "退勤しました。");
 
     private async Task PunchAsync(Func<long, Task<AccountResult>> punch, string successMessage)
     {
@@ -160,10 +157,6 @@
             }
             // 成功・失敗どちらでも DB の状態を読み直す (別のタブで打刻した場合や、日付が変わっていた場合に表示を合わせる)
             Status = await AttendanceService.GetTodayAsync(userId);
-            if (result.Succeeded)
-            {
-                comment = Status.Comment;
-            }
         }
         catch (Exception ex)
         {

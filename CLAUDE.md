@@ -11,11 +11,20 @@
 ```bash
 dotnet build -c Debug MyBlazorApp.csproj
 dotnet run --launch-profile http        # http://localhost:5000 で待ち受け、ProxyBasePath を設定
+dotnet test MyBlazorApp.Tests          # テストを実行（リポジトリ直下で）
 ```
 
 - dotnet は apt でインストールしてあり、本体は `/usr/bin/dotnet`、`DOTNET_ROOT=/usr/lib/dotnet` です。`.vscode/tasks.json` と `launch.json` はこれらのパスを直接書いています。
 - VS Code のデバッグ（`.vscode/launch.json`）は `bin/Debug/net10.0/MyBlazorApp.dll` を直接起動します。そのため `Properties/launchSettings.json` は**適用されません**（待ち受けアドレスは launch.json 側で `ASPNETCORE_URLS=http://localhost:5000` を設定）。この起動方法では `ProxyBasePath` が未設定なので、`App.razor` 内のクライアント側 base href スクリプトによって動作しています。
-- このリポジトリにはテストも linter もありません。
+- テストは xUnit のプロジェクト `MyBlazorApp.Tests/`（`MyBlazorApp.csproj` を参照）にあり、リポジトリ直下で `dotnet test MyBlazorApp.Tests` で実行する（引数なしの `dotnet test` は直下の `MyBlazorApp.csproj` が対象になり、テストは実行されない）。テストはデータベースを使わない。`MyBlazorApp.csproj` は `MyBlazorApp.Tests/**` を取り込まない設定にしてある。linter はない。
+
+## 作業ルール
+
+- 未回答の `[Answer]` が残っている間は実装しない。
+- 方針を人が承認するまで実装しない。
+- テストが失敗したら、テストではなく実装を直す。
+- 判定や入力チェックは C# のクラスに書いてテストする（画面や SQL だけに書かない）。
+- コミットや push はしない（ユーザーが明示的に依頼した場合を除く）。
 
 ## プロキシ対応（Program.cs と App.razor にまたがる）
 
@@ -56,9 +65,9 @@ SageMaker のプロキシは `/codeeditor/default/proxy/5000` のプレフィッ
 
 ## 勤怠機能
 
-画面は `Components/Pages/AttendanceClock.razor`（`attendance`。ルート `/` もこの画面で、ログイン後の既定の画面になる。Entity の `Attendance` と名前がぶつかるので画面のクラス名は `AttendanceClock`）、処理は `Logic/Attendance/AttendanceService.cs`、SQL は `Sql/Attendance/`、テーブル `attendances` の DDL は `Ddl/CreateAttendanceTables_<DB 種別>.sql`。
+画面は `Components/Pages/AttendanceClock.razor`（`attendance`。ルート `/` もこの画面で、ログイン後の既定の画面になる。Entity の `Attendance` と名前がぶつかるので画面のクラス名は `AttendanceClock`）、処理は `Logic/Attendance/AttendanceService.cs`、SQL は `Sql/Attendance/`、テーブル `attendances` の DDL は `Ddl/CreateAuthTables_<DB 種別>.sql`（ログイン機能のテーブルと同じファイル）。
 
 - ログインユーザー・日本時間の日付ごとに 1 行（`UNIQUE (user_id, work_date)`）。出勤は行が無いときだけ INSERT、退勤は `clock_out_at IS NULL` のときだけ UPDATE し、影響行数 0 なら打刻済みとして扱う（画面のボタン制御だけに頼らない）。日付はボタンを押した時点のサーバー時刻で判定する。
-- 日付をまたぐ勤務・打刻の訂正は扱わない仕様。コメントは出勤・退勤時に保存し、退勤時の内容で上書きする（最大 1024 文字、空欄は NULL）。
+- 日付をまたぐ勤務・打刻の訂正は扱わない仕様。
 - 現在時刻の表示は `AttendanceClock.razor.js` がブラウザで行う（サーバー側のタイマーで毎秒再描画しない）。日本時間の日付が変わると `OnDateChanged` で打刻状況を読み直す。
 - 勤怠一覧は `Components/Pages/AttendanceList.razor`（`attendance/list`）。ログインユーザーの当月分（日本時間）を月の全日 1 日 1 行で表示する（表示のみ）。土日の行は app.css の `attendance-row-saturday` / `attendance-row-sunday` で色分けし、祝日は扱わない。勤務時間は退勤 − 出勤（秒は切り捨て）から休憩 `AttendanceService.BreakMinutes`（今は 60 分固定）を引いた値で、退勤していない日は空欄、合計にも含めない。
