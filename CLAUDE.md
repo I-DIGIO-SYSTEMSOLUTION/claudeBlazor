@@ -20,7 +20,7 @@ scripts/reset-today.sh                 # 今日の打刻を消す（動作確認
 - テストは xUnit のプロジェクト `MyBlazorApp.Tests/`（`MyBlazorApp.csproj` を参照）にあり、リポジトリ直下で `dotnet test MyBlazorApp.Tests` で実行する（引数なしの `dotnet test` は直下の `MyBlazorApp.csproj` が対象になり、テストは実行されない）。テストはデータベースを使わない。`MyBlazorApp.csproj` は `MyBlazorApp.Tests/**` を取り込まない設定にしてある。linter はない。
 
 ## 作業ルール
-
+- プロンプトの回答は常に日本語で回答する。
 - 依頼された範囲以外のコードは変更しない。
 - 不具合の原因は、今のコードを読んで調べる。git の履歴（`git log`・`git show`・過去のコミットとの差分）やほかのブランチ（`origin/main` など）は調べない（ユーザーが頼んだときを除く）。作業中の変更を `git status` / `git diff` で見るのはよい。
 - 依頼と関係のない不具合に気づいても、ユーザーが不具合を探しているとき（「ほかに不具合がないか見て」などと頼まれたとき）だけ伝える。
