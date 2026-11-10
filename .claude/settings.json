@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(/docs/issues/**)",
+      "Edit(/docs/feature/**)"
+    ]
+  }
+}
